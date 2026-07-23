@@ -142,7 +142,9 @@ const api = {
   findTerminal: (termId: string) => ipcRenderer.invoke('term:find', termId),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   setCaffeine: (on: boolean) => ipcRenderer.invoke('caffeine:set', on),
-  getCaffeine: () => ipcRenderer.invoke('caffeine:get')
+  getCaffeine: () => ipcRenderer.invoke('caffeine:get'),
+  getVersion: () => ipcRenderer.invoke('app:version'),
+  relaunch: () => ipcRenderer.invoke('app:relaunch')
 }
 
 contextBridge.exposeInMainWorld('api', api)

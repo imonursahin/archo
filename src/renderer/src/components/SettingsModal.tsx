@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getLang, setLang, t, type Lang } from '../lib/i18n'
 import { getTheme, applyTheme, type Theme } from '../lib/theme'
 import { getPrefs, setPref, type Prefs } from '../lib/prefs'
@@ -158,33 +158,41 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
 }
 
 function UpdateRow(): JSX.Element {
+  const [version, setVersion] = useState('')
   const [state, setState] = useState<{
     checking: boolean
-    current?: string
+    checked: boolean
     latest?: string
     url?: string
     hasUpdate?: boolean
     failed?: boolean
-  }>({ checking: false })
+  }>({ checking: false, checked: false })
+
+  useEffect(() => {
+    window.api.getVersion().then(setVersion)
+  }, [])
 
   async function check(): Promise<void> {
     setState((s) => ({ ...s, checking: true, failed: false }))
     try {
       const r = await window.api.checkUpdate()
+      setVersion(r.current)
       setState({
         checking: false,
-        current: r.current,
+        checked: true,
         latest: r.latest,
         url: r.url,
         hasUpdate: r.hasUpdate,
         failed: !!r.error && !r.latest
       })
     } catch {
-      setState({ checking: false, failed: true })
+      setState({ checking: false, checked: true, failed: true })
     }
   }
 
-  const BREW_CMD = 'brew upgrade --cask archo'
+  // `brew update` first — otherwise the local tap is stale and upgrade reports
+  // "already installed". Restart is needed to run the newly installed binary.
+  const BREW_CMD = 'brew update && brew upgrade --cask archo'
   const [copied, setCopied] = useState(false)
   function copyBrew(): void {
     navigator.clipboard.writeText(BREW_CMD).then(() => {
@@ -196,10 +204,11 @@ function UpdateRow(): JSX.Element {
   return (
     <div className="update-col">
       <div className="update-row">
+        {version && <span className="app-version">v{version}</span>}
         <button className="btn" onClick={check} disabled={state.checking}>
           {state.checking ? t('checkingUpdate') : `↻ ${t('checkUpdate')}`}
         </button>
-        {state.current && !state.checking && (
+        {state.checked && !state.checking && (
           <span className="update-status">
             {state.hasUpdate ? (
               <>
@@ -217,13 +226,9 @@ function UpdateRow(): JSX.Element {
                 )}
               </>
             ) : state.failed ? (
-              <span className="muted">
-                {t('updateCheckFailed')} (v{state.current})
-              </span>
+              <span className="muted">{t('updateCheckFailed')}</span>
             ) : (
-              <span className="muted">
-                {t('upToDate')} (v{state.current})
-              </span>
+              <span className="muted">{t('upToDate')}</span>
             )}
           </span>
         )}
@@ -234,6 +239,13 @@ function UpdateRow(): JSX.Element {
           <code>{BREW_CMD}</code>
           <button className="brew-copy" onClick={copyBrew}>
             {copied ? t('copied') : t('copy')}
+          </button>
+          <button
+            className="brew-copy"
+            onClick={() => window.api.relaunch()}
+            title={t('restartHint')}
+          >
+            ↻ {t('restartApp')}
           </button>
         </div>
       )}

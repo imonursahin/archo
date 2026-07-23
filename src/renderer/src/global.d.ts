@@ -299,6 +299,8 @@ export interface StudioApi {
   }>
   setCaffeine(on: boolean): Promise<boolean>
   getCaffeine(): Promise<boolean>
+  getVersion(): Promise<string>
+  relaunch(): Promise<void>
 }
 
 declare global {

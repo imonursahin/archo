@@ -439,6 +439,11 @@ function registerIpc(): void {
     return caffeineId >= 0 && powerSaveBlocker.isStarted(caffeineId)
   })
   handle('caffeine:get', () => caffeineId >= 0 && powerSaveBlocker.isStarted(caffeineId))
+  handle('app:version', () => app.getVersion())
+  handle('app:relaunch', () => {
+    app.relaunch()
+    app.exit(0)
+  })
   handle('update:check', () => checkUpdate())
   handle('git:branch', (dir: string) => gitBranch(dir))
   handle('session:usage', (cwd: string, sessionId: string) => sessionUsage(cwd, sessionId))
@@ -527,7 +532,7 @@ app.whenReady().then(() => {
       if (r.hasUpdate && r.url) {
         const n = new Notification({
           title: 'Archo update available',
-          body: `v${r.latest} is out (you have ${r.current}). Click to download — or run: brew upgrade --cask archo`,
+          body: `v${r.latest} is out (you have ${r.current}). Click to download — or run: brew update && brew upgrade --cask archo`,
           silent: false
         })
         n.on('click', () => {

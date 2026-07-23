@@ -111,6 +111,11 @@ const DICT: Record<string, { en: string; tr: string }> = {
   orViaBrew: { en: 'or via Homebrew:', tr: 'veya Homebrew ile:' },
   copy: { en: 'Copy', tr: 'Kopyala' },
   copied: { en: 'Copied ✓', tr: 'Kopyalandı ✓' },
+  restartApp: { en: 'Restart', tr: 'Yeniden başlat' },
+  restartHint: {
+    en: 'After upgrading, restart to apply',
+    tr: 'Yükselttikten sonra uygulamak için yeniden başlat'
+  },
   testNotifTitle: { en: 'Archo', tr: 'Archo' },
   testNotifBody: {
     en: 'Test notification — desktop notifications work ✓',
