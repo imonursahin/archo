@@ -99,10 +99,17 @@ Built with Electron, React, and TypeScript.
 
 ## Install
 
-Download the latest `.dmg` from the [Releases](https://github.com/imonursahin/archo/releases) page.
+### Homebrew (recommended)
 
-1. Open the DMG and drag **Archo** into Applications.
-2. The app is unsigned, so the first launch needs **right-click → Open**, then confirm. It opens normally after that.
+```bash
+brew install --cask imonursahin/tap/archo
+```
+
+Opens with no extra steps — the cask clears the quarantine flag on install.
+
+### Manual
+
+Download the latest `.dmg` from the [Releases](https://github.com/imonursahin/archo/releases) page, open it, and drag **Archo** into Applications. The app is unsigned, so the first launch needs **right-click → Open**, then confirm.
 
 If macOS says **"Archo is damaged and can't be opened"**, that's Gatekeeper quarantining an unsigned download — the app is fine. Clear the quarantine flag once, then open it:
 

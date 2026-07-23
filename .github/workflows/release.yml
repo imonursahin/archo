@@ -61,3 +61,25 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "Archo ${{ steps.ver.outputs.v }}" \
             --generate-notes
+
+      - name: Update Homebrew cask
+        if: steps.check.outputs.exists == 'false'
+        env:
+          DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          set -e
+          VER="${{ steps.ver.outputs.v }}"
+          SHA=$(shasum -a 256 dist/Archo-${VER}-arm64.dmg | awk '{print $1}')
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+          git clone git@github.com:imonursahin/homebrew-tap.git tap
+          cd tap
+          sed -i '' -E "s/^  version \".*\"/  version \"${VER}\"/" Casks/archo.rb
+          sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/archo.rb
+          git config user.name "Onur Şahin"
+          git config user.email "31903339+imonursahin@users.noreply.github.com"
+          git commit -am "archo ${VER}"
+          git push
