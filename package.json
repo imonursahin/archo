@@ -1,6 +1,6 @@
 {
   "name": "agent-studio",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Visual control center for Claude Code — manage skills/agents/MCP and browse named terminal sessions",
   "main": "./out/main/index.js",
   "author": "onur",
