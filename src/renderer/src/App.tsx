@@ -360,7 +360,8 @@ export default function App(): JSX.Element {
           <button
             className={`btn icon-btn caffeine-btn ${caffeine ? 'on' : ''}`}
             onClick={async () => setCaffeine(await window.api.setCaffeine(!caffeine))}
-            title={t('keepAwakeHint')}
+            data-tip={t('keepAwakeHint')}
+            aria-label={t('keepAwakeHint')}
           >
             ☕ {t('keepAwake')}
           </button>

@@ -2398,6 +2398,35 @@ textarea {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
+
+/* fast custom tooltip (native title has a ~1s delay we can't change) */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  background: var(--bg-elev, #1c1c1e);
+  color: var(--text, #eee);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 400;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 0.12s ease 0.15s, transform 0.12s ease 0.15s;
+  z-index: 200;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
 .ac-open {
   display: flex;
   align-items: center;
