@@ -104,6 +104,12 @@ Download the latest `.dmg` from the [Releases](https://github.com/imonursahin/ar
 1. Open the DMG and drag **Archo** into Applications.
 2. The app is unsigned, so the first launch needs **right-click → Open**, then confirm. It opens normally after that.
 
+If macOS says **"Archo is damaged and can't be opened"**, that's Gatekeeper quarantining an unsigned download — the app is fine. Clear the quarantine flag once, then open it:
+
+```bash
+xattr -cr /Applications/Archo.app
+```
+
 Currently built for macOS on Apple Silicon (arm64).
 
 ---
