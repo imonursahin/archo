@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Ship a new Archo release — fully automatic via GitHub Actions.
-#   ./scripts/release.sh 0.1.1
+#   npm run ship 0.1.1        (or: ./scripts/release.sh 0.1.1)
 # This only bumps the version and pushes. The Release workflow (.github/
 # workflows/release.yml) then builds the macOS installers and publishes the
 # GitHub Release. Installed apps auto-detect it on next launch.

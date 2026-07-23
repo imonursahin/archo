@@ -12,6 +12,7 @@
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
     "release": "electron-vite build && electron-builder --publish always",
+    "ship": "bash scripts/release.sh",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "build": {
