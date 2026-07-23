@@ -9,6 +9,7 @@ on:
   push:
     branches: [master]
     paths: ['package.json']
+  workflow_dispatch: # allow manual runs from the Actions tab
 
 permissions:
   contents: write # needed to create the release + tag

@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "pack": "electron-vite build && electron-builder --dir",
-    "dist": "electron-vite build && electron-builder",
+    "dist": "electron-vite build && electron-builder --publish never",
     "release": "electron-vite build && electron-builder --publish always",
     "ship": "bash scripts/release.sh",
     "postinstall": "electron-rebuild -f -w node-pty"
