@@ -34,16 +34,16 @@ Built with Electron, React, and TypeScript.
 - Named, resumable terminals per assistant with full recorded scrollback
 - Resume previous Claude Code conversations
 - Sessions bucketed by recency (Today, Yesterday, This week…) plus pinning, tags, and search
-- Split-view for two terminals side by side
+- Split-view to watch and work in two terminals side by side
 - Smart links in terminal output — clickable URLs and `file:line` references
 
 ### Per-session Claude controls
-- Working-directory picker with a recent-directories history
-- `@file` context picker across multiple roots
-- Model selector (auto / Opus / Sonnet / Haiku) and reasoning-effort selector
+- Set the working directory — pick a path with a recent-directories history, and add extra directories for `@path` references
+- Pull files into context with the `@file` picker across multiple roots
+- Pick the model (auto / Opus / Sonnet / Haiku) and reasoning effort, then launch a Claude session in one click
 - Live context budget with cost and duration for the active session
 - Git branch and "has changes" indicators
-- Prompt library to save and re-send prompts
+- Prompt library to save and re-send prompts to the active terminal
 - Skill bridge — link an external repo so an assistant's skills apply there
 
 ### MCP
@@ -69,11 +69,27 @@ Built with Electron, React, and TypeScript.
 
 ![Workbench](docs/screenshots/workbench.png)
 
+**One assistant, everything in place** — skills, agents, commands, MCP servers, plugins, hooks, and settings, all in one panel.
+
+![Resource overview](docs/screenshots/overview.png)
+
+**Sessions** — named, resumable terminals per assistant, with model/effort selectors, `@file` context, and a running Claude session.
+
+![Sessions](docs/screenshots/sessions.png)
+
+**Prompt library** — save reusable prompts and send them to the active terminal with one click.
+
+![Prompt library](docs/screenshots/prompts.png)
+
 **Resource editor** — edit a skill's or agent's frontmatter and Markdown, with Edit / Preview / Raw modes.
 
 ![Skill editor](docs/screenshots/editor.png)
 
 ![Agent editor](docs/screenshots/agent.png)
+
+**MCP** — configure servers at global and project scope, test the connection, and browse or run their tools.
+
+![MCP panel](docs/screenshots/mcp.png)
 
 ---
 
