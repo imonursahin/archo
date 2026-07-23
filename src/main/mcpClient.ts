@@ -23,20 +23,124 @@ function cleanEnv(extra?: Record<string, string>): Record<string, string> {
   return { ...env, ...(extra || {}) }
 }
 
+const isHttpCfg = (cfg: any): boolean =>
+  !!cfg && (!!cfg.url || cfg.type === 'http' || cfg.type === 'sse') && !cfg.command
+
+// ---- HTTP (Streamable HTTP) transport ------------------------------------
+// One JSON-RPC POST; the server answers with either application/json or an
+// SSE stream (text/event-stream) carrying the message. Keeps the Mcp-Session-Id
+// header across calls and forwards any custom auth headers from the config.
+function makeHttpRpc(cfg: any, timeoutMs: number): (msg: unknown) => Promise<any> {
+  const url: string = cfg.url
+  const base: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    ...(cfg.headers || {})
+  }
+  let sessionId: string | undefined
+  return async (msg: unknown): Promise<any> => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { ...base, ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}) },
+      body: JSON.stringify(msg),
+      signal: AbortSignal.timeout(timeoutMs)
+    })
+    const sid = res.headers.get('mcp-session-id')
+    if (sid) sessionId = sid
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ''}`)
+    }
+    const ct = res.headers.get('content-type') || ''
+    if (ct.includes('text/event-stream')) {
+      const text = await res.text()
+      for (const block of text.split(/\r?\n\r?\n/)) {
+        const data = block
+          .split(/\r?\n/)
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => l.slice(5).trim())
+          .join('\n')
+        if (!data) continue
+        try {
+          const obj = JSON.parse(data)
+          if (obj && (obj.id !== undefined || obj.result || obj.error)) return obj
+        } catch {
+          /* keep scanning */
+        }
+      }
+      return null // notifications / empty stream
+    }
+    if (ct.includes('application/json')) return await res.json()
+    return null // 202 Accepted with no body (notifications)
+  }
+}
+
+const INIT_PARAMS = {
+  protocolVersion: '2025-03-26',
+  capabilities: {},
+  clientInfo: { name: 'Archo', version: '0.1.0' }
+}
+
+async function testMcpHttp(cfg: any, timeoutMs: number): Promise<McpTestResult> {
+  const start = Date.now()
+  const elapsed = (): number => Date.now() - start
+  if (!cfg.url) return { ok: false, error: 'MCP url eksik', elapsedMs: elapsed() }
+  const rpc = makeHttpRpc(cfg, timeoutMs)
+  try {
+    const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS })
+    if (init?.error) return { ok: false, error: init.error.message || 'initialize hatası', elapsedMs: elapsed() }
+    const serverName = init?.result?.serverInfo?.name
+    const serverVersion = init?.result?.serverInfo?.version
+    await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }).catch(() => {})
+    const list = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })
+    if (list?.error) return { ok: false, error: list.error.message || 'tools/list hatası', elapsedMs: elapsed() }
+    const tools: McpTool[] = (list?.result?.tools || []).map((t: any) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema
+    }))
+    return { ok: true, serverName, serverVersion, tools, elapsedMs: elapsed() }
+  } catch (e: any) {
+    const msg = e?.name === 'TimeoutError' ? 'zaman aşımı (bağlanamadı)' : e?.message || String(e)
+    return { ok: false, error: msg, elapsedMs: elapsed() }
+  }
+}
+
+async function callMcpToolHttp(
+  cfg: any,
+  toolName: string,
+  args: unknown,
+  timeoutMs: number
+): Promise<McpCallResult> {
+  const start = Date.now()
+  const elapsed = (): number => Date.now() - start
+  if (!cfg.url) return { ok: false, error: 'MCP url eksik', elapsedMs: elapsed() }
+  const rpc = makeHttpRpc(cfg, timeoutMs)
+  try {
+    await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS })
+    await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }).catch(() => {})
+    const r = await rpc({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: toolName, arguments: args ?? {} }
+    })
+    if (r?.error) return { ok: false, error: r.error.message || 'tool hatası', elapsedMs: elapsed() }
+    return { ok: true, result: r?.result, elapsedMs: elapsed() }
+  } catch (e: any) {
+    const msg = e?.name === 'TimeoutError' ? 'zaman aşımı' : e?.message || String(e)
+    return { ok: false, error: msg, elapsedMs: elapsed() }
+  }
+}
+
 // Connect to a stdio MCP server, run the initialize + tools/list handshake,
 // and return the advertised tools. Newline-delimited JSON-RPC over stdio.
 export async function testMcp(cfg: any, timeoutMs = 15000): Promise<McpTestResult> {
   const start = Date.now()
   const elapsed = (): number => Date.now() - start
 
-  if (!cfg || (!cfg.command && (cfg.url || cfg.type === 'http' || cfg.type === 'sse'))) {
-    return {
-      ok: false,
-      error: 'HTTP/SSE tabanlı MCP testi henüz desteklenmiyor (yalnızca stdio).',
-      elapsedMs: elapsed()
-    }
-  }
-  if (!cfg.command) {
+  if (isHttpCfg(cfg)) return testMcpHttp(cfg, timeoutMs)
+  if (!cfg?.command) {
     return { ok: false, error: 'Geçersiz MCP config (command yok).', elapsedMs: elapsed() }
   }
 
@@ -160,8 +264,9 @@ export async function callMcpTool(
 ): Promise<McpCallResult> {
   const start = Date.now()
   const elapsed = (): number => Date.now() - start
+  if (isHttpCfg(cfg)) return callMcpToolHttp(cfg, toolName, args, timeoutMs)
   if (!cfg?.command) {
-    return { ok: false, error: 'stdio olmayan MCP çağrısı desteklenmiyor', elapsedMs: elapsed() }
+    return { ok: false, error: 'Geçersiz MCP config (command yok).', elapsedMs: elapsed() }
   }
   return new Promise<McpCallResult>((resolve) => {
     let done = false
