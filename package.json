@@ -1,0 +1,52 @@
+{
+  "name": "agent-studio",
+  "version": "0.1.0",
+  "description": "Visual control center for Claude Code — manage skills/agents/MCP and browse named terminal sessions",
+  "main": "./out/main/index.js",
+  "author": "onur",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder",
+    "release": "electron-vite build && electron-builder --publish always",
+    "postinstall": "electron-rebuild -f -w node-pty"
+  },
+  "build": {
+    "appId": "com.archo.app",
+    "productName": "Archo",
+    "directories": { "output": "dist", "buildResources": "resources" },
+    "files": ["out/**/*", "package.json"],
+    "extraResources": [{ "from": "resources/icon.png", "to": "icon.png" }],
+    "asarUnpack": ["**/node_modules/node-pty/**"],
+    "mac": {
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "target": ["dmg", "zip"]
+    },
+    "publish": [{ "provider": "github", "owner": "imonursahin", "repo": "archo" }]
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  }
+}
