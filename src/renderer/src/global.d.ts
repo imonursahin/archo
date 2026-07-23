@@ -288,6 +288,13 @@ export interface StudioApi {
     sessionName: string
     terminalName: string
   } | null>
+  checkUpdate(): Promise<{
+    current: string
+    latest?: string
+    url?: string
+    hasUpdate: boolean
+    error?: string
+  }>
 }
 
 declare global {

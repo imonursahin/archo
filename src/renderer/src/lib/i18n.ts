@@ -95,6 +95,13 @@ const DICT: Record<string, { en: string; tr: string }> = {
     tr: 'Sadece bundan uzun süren görevler için bildir.'
   },
   testNotifBtn: { en: 'Send test notification', tr: 'Test bildirimi gönder' },
+  version: { en: 'Version', tr: 'Sürüm' },
+  checkUpdate: { en: 'Check for updates', tr: 'Güncellemeleri denetle' },
+  checkingUpdate: { en: 'Checking…', tr: 'Denetleniyor…' },
+  updateAvailable: { en: 'Update available', tr: 'Güncelleme var' },
+  upToDate: { en: 'You have the latest version', tr: 'En güncel sürümdesin' },
+  updateCheckFailed: { en: 'Could not check for updates', tr: 'Güncelleme denetlenemedi' },
+  download: { en: 'Download', tr: 'İndir' },
   testNotifTitle: { en: 'Archo', tr: 'Archo' },
   testNotifBody: {
     en: 'Test notification — desktop notifications work ✓',

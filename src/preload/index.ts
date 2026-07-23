@@ -137,7 +137,8 @@ const api = {
     ipcRenderer.on('pty:done', h)
     return () => ipcRenderer.removeListener('pty:done', h)
   },
-  findTerminal: (termId: string) => ipcRenderer.invoke('term:find', termId)
+  findTerminal: (termId: string) => ipcRenderer.invoke('term:find', termId),
+  checkUpdate: () => ipcRenderer.invoke('update:check')
 }
 
 contextBridge.exposeInMainWorld('api', api)

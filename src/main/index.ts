@@ -11,6 +11,54 @@ import {
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const pexec = promisify(execFile)
+
+// ---- update check via the user's authenticated `gh` CLI (no embedded token;
+// works with a private repo). Compares the latest GitHub release to this app's
+// version. Unsigned macOS can't silent-install, so we notify + open the page.
+const UPDATE_REPO = 'imonursahin/archo'
+
+function ghEnv(): NodeJS.ProcessEnv {
+  const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
+  const existing = (process.env.PATH || '').split(':')
+  return { ...process.env, PATH: [...new Set([...existing, ...extra])].join(':') }
+}
+
+function verGt(a: string, b: string): boolean {
+  const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
+  const pb = b.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return true
+    if ((pa[i] || 0) < (pb[i] || 0)) return false
+  }
+  return false
+}
+
+async function checkUpdate(): Promise<{
+  current: string
+  latest?: string
+  url?: string
+  hasUpdate: boolean
+  error?: string
+}> {
+  const current = app.getVersion()
+  try {
+    const { stdout } = await pexec(
+      'gh',
+      ['release', 'view', '--repo', UPDATE_REPO, '--json', 'tagName,url'],
+      { env: ghEnv() }
+    )
+    const j = JSON.parse(stdout)
+    const latest = String(j.tagName || '').replace(/^v/, '')
+    return { current, latest, url: j.url, hasUpdate: !!latest && verGt(latest, current) }
+  } catch (e: any) {
+    // no releases yet, gh missing, or not authed
+    return { current, hasUpdate: false, error: String(e?.stderr || e?.message || e).slice(0, 200) }
+  }
+}
 
 // App name = Archo, but keep the data store where it already lives (userData
 // defaults to appData/<name>, so pin it to the original 'agent-studio' path
@@ -324,6 +372,7 @@ function registerIpc(): void {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url)
   })
   handle('term:find', (termId: string) => findTerminal(termId))
+  handle('update:check', () => checkUpdate())
   handle('git:branch', (dir: string) => gitBranch(dir))
   handle('session:usage', (cwd: string, sessionId: string) => sessionUsage(cwd, sessionId))
   handle('bridge:status', (dir: string) => bridgeStatus(dir))
@@ -400,6 +449,26 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+  // auto-check for a newer release shortly after launch; notify (unsigned mac
+  // can't silent-install, so we just point the user at the download page)
+  setTimeout(async () => {
+    try {
+      const r = await checkUpdate()
+      if (r.hasUpdate && r.url) {
+        const n = new Notification({
+          title: 'Archo güncellemesi var',
+          body: `Sürüm ${r.latest} yayınlandı (şu an ${r.current}). İndirmek için tıkla.`,
+          silent: false
+        })
+        n.on('click', () => {
+          if (r.url) shell.openExternal(r.url)
+        })
+        n.show()
+      }
+    } catch {
+      /* ignore */
+    }
+  }, 8000)
 })
 
 app.on('window-all-closed', () => {

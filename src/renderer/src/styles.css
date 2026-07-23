@@ -3950,6 +3950,17 @@ textarea {
 }
 .pref-test:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 
+.update-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.update-status { font-size: 12.5px; }
+.update-status .muted { color: var(--muted); }
+.update-status a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.update-status a:hover { text-decoration: underline; }
+
 /* session list: running spinner */
 .ss-spinner {
   flex: 0 0 auto;

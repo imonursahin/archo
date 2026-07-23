@@ -79,6 +79,9 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
                 ☀ {t('light')}
               </button>
             </div>
+
+            <label className="modal-label">{t('version')}</label>
+            <UpdateRow />
           </>
         )}
 
@@ -126,6 +129,70 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function UpdateRow(): JSX.Element {
+  const [state, setState] = useState<{
+    checking: boolean
+    current?: string
+    latest?: string
+    url?: string
+    hasUpdate?: boolean
+    failed?: boolean
+  }>({ checking: false })
+
+  async function check(): Promise<void> {
+    setState((s) => ({ ...s, checking: true, failed: false }))
+    try {
+      const r = await window.api.checkUpdate()
+      setState({
+        checking: false,
+        current: r.current,
+        latest: r.latest,
+        url: r.url,
+        hasUpdate: r.hasUpdate,
+        failed: !!r.error && !r.latest
+      })
+    } catch {
+      setState({ checking: false, failed: true })
+    }
+  }
+
+  return (
+    <div className="update-row">
+      <button className="btn" onClick={check} disabled={state.checking}>
+        {state.checking ? t('checkingUpdate') : `↻ ${t('checkUpdate')}`}
+      </button>
+      {state.current && !state.checking && (
+        <span className="update-status">
+          {state.hasUpdate ? (
+            <>
+              {t('updateAvailable')} — v{state.latest}{' '}
+              {state.url && (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    if (state.url) window.api.openExternal(state.url)
+                  }}
+                >
+                  {t('download')}
+                </a>
+              )}
+            </>
+          ) : state.failed ? (
+            <span className="muted">
+              {t('updateCheckFailed')} (v{state.current})
+            </span>
+          ) : (
+            <span className="muted">
+              {t('upToDate')} (v{state.current})
+            </span>
+          )}
+        </span>
+      )}
     </div>
   )
 }
