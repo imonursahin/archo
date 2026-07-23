@@ -504,8 +504,8 @@ app.whenReady().then(() => {
       const r = await checkUpdate()
       if (r.hasUpdate && r.url) {
         const n = new Notification({
-          title: 'Archo güncellemesi var',
-          body: `Sürüm ${r.latest} yayınlandı (şu an ${r.current}). İndirmek için tıkla.`,
+          title: 'Archo update available',
+          body: `v${r.latest} is out (you have ${r.current}). Click to download — or run: brew upgrade --cask archo`,
           silent: false
         })
         n.on('click', () => {

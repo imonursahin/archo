@@ -184,38 +184,58 @@ function UpdateRow(): JSX.Element {
     }
   }
 
+  const BREW_CMD = 'brew upgrade --cask archo'
+  const [copied, setCopied] = useState(false)
+  function copyBrew(): void {
+    navigator.clipboard.writeText(BREW_CMD).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
   return (
-    <div className="update-row">
-      <button className="btn" onClick={check} disabled={state.checking}>
-        {state.checking ? t('checkingUpdate') : `↻ ${t('checkUpdate')}`}
-      </button>
-      {state.current && !state.checking && (
-        <span className="update-status">
-          {state.hasUpdate ? (
-            <>
-              {t('updateAvailable')} — v{state.latest}{' '}
-              {state.url && (
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    if (state.url) window.api.openExternal(state.url)
-                  }}
-                >
-                  {t('download')}
-                </a>
-              )}
-            </>
-          ) : state.failed ? (
-            <span className="muted">
-              {t('updateCheckFailed')} (v{state.current})
-            </span>
-          ) : (
-            <span className="muted">
-              {t('upToDate')} (v{state.current})
-            </span>
-          )}
-        </span>
+    <div className="update-col">
+      <div className="update-row">
+        <button className="btn" onClick={check} disabled={state.checking}>
+          {state.checking ? t('checkingUpdate') : `↻ ${t('checkUpdate')}`}
+        </button>
+        {state.current && !state.checking && (
+          <span className="update-status">
+            {state.hasUpdate ? (
+              <>
+                {t('updateAvailable')} — v{state.latest}{' '}
+                {state.url && (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (state.url) window.api.openExternal(state.url)
+                    }}
+                  >
+                    {t('download')}
+                  </a>
+                )}
+              </>
+            ) : state.failed ? (
+              <span className="muted">
+                {t('updateCheckFailed')} (v{state.current})
+              </span>
+            ) : (
+              <span className="muted">
+                {t('upToDate')} (v{state.current})
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+      {state.hasUpdate && !state.checking && (
+        <div className="update-brew">
+          <span className="muted">{t('orViaBrew')}</span>
+          <code>{BREW_CMD}</code>
+          <button className="brew-copy" onClick={copyBrew}>
+            {copied ? t('copied') : t('copy')}
+          </button>
+        </div>
       )}
     </div>
   )

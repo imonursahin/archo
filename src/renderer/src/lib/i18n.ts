@@ -103,6 +103,9 @@ const DICT: Record<string, { en: string; tr: string }> = {
   upToDate: { en: 'You have the latest version', tr: 'En güncel sürümdesin' },
   updateCheckFailed: { en: 'Could not check for updates', tr: 'Güncelleme denetlenemedi' },
   download: { en: 'Download', tr: 'İndir' },
+  orViaBrew: { en: 'or via Homebrew:', tr: 'veya Homebrew ile:' },
+  copy: { en: 'Copy', tr: 'Kopyala' },
+  copied: { en: 'Copied ✓', tr: 'Kopyalandı ✓' },
   testNotifTitle: { en: 'Archo', tr: 'Archo' },
   testNotifBody: {
     en: 'Test notification — desktop notifications work ✓',
