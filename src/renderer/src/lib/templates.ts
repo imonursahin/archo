@@ -1,10 +1,13 @@
 // Ready-made starter templates per resource kind. Each returns the full file
-// content (frontmatter + body) given the resource name.
+// content (frontmatter + body) given the resource name. Labels and human-readable
+// content are localized via i18n (`label` is a translation key).
+import { t, ti } from './i18n'
+
 export type Kind = 'skill' | 'agent' | 'command'
 
 export interface Template {
   id: string
-  label: string
+  label: string // i18n key — render with t(label)
   body: (name: string) => string
 }
 
@@ -12,58 +15,58 @@ export const TEMPLATES: Record<Kind, Template[]> = {
   skill: [
     {
       id: 'blank',
-      label: 'Boş',
+      label: 'tplBlank',
       body: (n) => `---\nname: ${n}\ndescription: \n---\n# ${n}\n\n`
     },
     {
       id: 'example',
-      label: 'Örnek',
+      label: 'tplExample',
       body: (n) =>
-        `---\nname: ${n}\ndescription: TODO — bu skill ne zaman kullanılır\n---\n# ${n}\n\nBu skill şunu yapar…\n\n## Adımlar\n1. …\n2. …\n`
+        `---\nname: ${n}\ndescription: ${t('tplSkillExampleDesc')}\n---\n# ${n}\n\n${t('tplSkillExampleBody')}\n`
     },
     {
       id: 'research',
-      label: 'Araştırma',
+      label: 'tplResearch',
       body: (n) =>
-        `---\nname: ${n}\ndescription: Bir konuyu çok kaynaktan araştırıp özet çıkarır\n---\n# ${n}\n\nVerilen konuyu araştır:\n- Web'de ara, kaynakları oku\n- Bulguları doğrula\n- Kısa, kaynaklı bir özet yaz\n`
+        `---\nname: ${n}\ndescription: ${t('tplSkillResearchDesc')}\n---\n# ${n}\n\n${t('tplSkillResearchBody')}\n`
     }
   ],
   agent: [
     {
       id: 'blank',
-      label: 'Boş',
+      label: 'tplBlank',
       body: (n) => `---\nname: ${n}\ndescription: \ntools: \nmodel: inherit\n---\n`
     },
     {
       id: 'example',
-      label: 'Örnek',
+      label: 'tplExample',
       body: (n) =>
-        `---\nname: ${n}\ndescription: TODO — bu agent ne yapar\ntools: Read, Grep, Glob\nmodel: inherit\n---\nSen bir ${n} agent'ısın. Görevin…\n`
+        `---\nname: ${n}\ndescription: ${t('tplAgentExampleDesc')}\ntools: Read, Grep, Glob\nmodel: inherit\n---\n${ti('tplAgentExampleBody', { n })}\n`
     },
     {
       id: 'reviewer',
-      label: 'Kod İnceleyici',
+      label: 'tplReviewer',
       body: (n) =>
-        `---\nname: ${n}\ndescription: Diff'i inceleyip bug ve iyileştirme önerir\ntools: Read, Grep, Glob, Bash\nmodel: inherit\n---\nSen kıdemli bir kod inceleyicisin. Verilen değişiklikleri incele:\n- Doğruluk/bug riskleri\n- Güvenlik açıkları\n- Sadeleştirme fırsatları\nHer bulgu için dosya:satır ver ve önem derecesi belirt.\n`
+        `---\nname: ${n}\ndescription: ${t('tplAgentReviewerDesc')}\ntools: Read, Grep, Glob, Bash\nmodel: inherit\n---\n${t('tplAgentReviewerBody')}\n`
     },
     {
       id: 'explorer',
-      label: 'Kâşif (read-only)',
+      label: 'tplExplorer',
       body: (n) =>
-        `---\nname: ${n}\ndescription: Kod tabanında arama yapıp ilgili yerleri bulur\ntools: Read, Grep, Glob\nmodel: inherit\n---\nSen salt-okunur bir keşif agent'ısın. Sorulan şeyi kod tabanında bul,\nilgili dosya:satır referanslarını ve kısa bir özet döndür. Kod düzenleme yapma.\n`
+        `---\nname: ${n}\ndescription: ${t('tplAgentExplorerDesc')}\ntools: Read, Grep, Glob\nmodel: inherit\n---\n${t('tplAgentExplorerBody')}\n`
     }
   ],
   command: [
     {
       id: 'blank',
-      label: 'Boş',
+      label: 'tplBlank',
       body: (n) => `---\ndescription: \n---\n# /${n}\n\n`
     },
     {
       id: 'example',
-      label: 'Örnek',
+      label: 'tplExample',
       body: (n) =>
-        `---\ndescription: TODO — bu komut ne yapar\n---\n# /${n}\n\n$ARGUMENTS ile verilen girdiyi kullanarak şunu yap…\n`
+        `---\ndescription: ${t('tplCmdExampleDesc')}\n---\n# /${n}\n\n${t('tplCmdExampleBody')}\n`
     }
   ]
 }

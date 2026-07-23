@@ -36,7 +36,7 @@ export default function CreateModal({
   const templates = useMemo(() => {
     const base = TEMPLATES[kind]
     return presetContent
-      ? [{ id: 'dropped', label: t('droppedFile'), body: () => presetContent }, ...base]
+      ? [{ id: 'dropped', label: 'droppedFile', body: () => presetContent }, ...base]
       : base
   }, [kind, presetContent])
   const template = useMemo(
@@ -101,7 +101,7 @@ export default function CreateModal({
               className={`tpl-btn ${templateId === tpl.id ? 'active' : ''}`}
               onClick={() => setTemplateId(tpl.id)}
             >
-              {tpl.label}
+              {t(tpl.label)}
             </button>
           ))}
         </div>

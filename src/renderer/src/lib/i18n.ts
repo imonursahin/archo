@@ -298,6 +298,55 @@ const DICT: Record<string, { en: string; tr: string }> = {
   fieldName: { en: 'Name', tr: 'İsim' },
   templateLabel: { en: 'Template', tr: 'Şablon' },
   droppedFile: { en: 'Dropped file', tr: 'Sürüklenen dosya' },
+  // starter template labels
+  tplBlank: { en: 'Blank', tr: 'Boş' },
+  tplExample: { en: 'Example', tr: 'Örnek' },
+  tplResearch: { en: 'Research', tr: 'Araştırma' },
+  tplReviewer: { en: 'Code reviewer', tr: 'Kod İnceleyici' },
+  tplExplorer: { en: 'Explorer (read-only)', tr: 'Kâşif (read-only)' },
+  // starter template descriptions + bodies
+  tplSkillExampleDesc: {
+    en: 'TODO — when to use this skill',
+    tr: 'TODO — bu skill ne zaman kullanılır'
+  },
+  tplSkillExampleBody: {
+    en: 'This skill does…\n\n## Steps\n1. …\n2. …',
+    tr: 'Bu skill şunu yapar…\n\n## Adımlar\n1. …\n2. …'
+  },
+  tplSkillResearchDesc: {
+    en: 'Researches a topic across multiple sources and writes a summary',
+    tr: 'Bir konuyu çok kaynaktan araştırıp özet çıkarır'
+  },
+  tplSkillResearchBody: {
+    en: "Research the given topic:\n- Search the web, read the sources\n- Verify the findings\n- Write a short, sourced summary",
+    tr: "Verilen konuyu araştır:\n- Web'de ara, kaynakları oku\n- Bulguları doğrula\n- Kısa, kaynaklı bir özet yaz"
+  },
+  tplAgentExampleDesc: { en: 'TODO — what this agent does', tr: 'TODO — bu agent ne yapar' },
+  tplAgentExampleBody: {
+    en: 'You are a {n} agent. Your task is…',
+    tr: "Sen bir {n} agent'ısın. Görevin…"
+  },
+  tplAgentReviewerDesc: {
+    en: 'Reviews a diff and suggests bugs and improvements',
+    tr: "Diff'i inceleyip bug ve iyileştirme önerir"
+  },
+  tplAgentReviewerBody: {
+    en: 'You are a senior code reviewer. Review the given changes:\n- Correctness / bug risks\n- Security issues\n- Simplification opportunities\nGive file:line for each finding and note its severity.',
+    tr: 'Sen kıdemli bir kod inceleyicisin. Verilen değişiklikleri incele:\n- Doğruluk/bug riskleri\n- Güvenlik açıkları\n- Sadeleştirme fırsatları\nHer bulgu için dosya:satır ver ve önem derecesi belirt.'
+  },
+  tplAgentExplorerDesc: {
+    en: 'Searches the codebase and finds the relevant places',
+    tr: 'Kod tabanında arama yapıp ilgili yerleri bulur'
+  },
+  tplAgentExplorerBody: {
+    en: "You are a read-only exploration agent. Find what's asked in the codebase,\nreturn the relevant file:line references and a short summary. Don't edit code.",
+    tr: 'Sen salt-okunur bir keşif agent\'ısın. Sorulan şeyi kod tabanında bul,\nilgili dosya:satır referanslarını ve kısa bir özet döndür. Kod düzenleme yapma.'
+  },
+  tplCmdExampleDesc: { en: 'TODO — what this command does', tr: 'TODO — bu komut ne yapar' },
+  tplCmdExampleBody: {
+    en: 'Using the input given via $ARGUMENTS, do the following…',
+    tr: '$ARGUMENTS ile verilen girdiyi kullanarak şunu yap…'
+  },
   namePlaceholder: { en: '{kind}-name…', tr: '{kind}-adı…' },
   errNotCreated: { en: 'could not create', tr: 'oluşturulamadı' },
 

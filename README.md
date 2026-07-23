@@ -81,6 +81,10 @@ Built with Electron, React, and TypeScript.
 
 ![Prompt library](docs/screenshots/prompts.png)
 
+**Create a resource** — start a skill, agent, or command from a template.
+
+![New resource](docs/screenshots/new-resource.png)
+
 **Resource editor** — edit a skill's or agent's frontmatter and Markdown, with Edit / Preview / Raw modes.
 
 ![Skill editor](docs/screenshots/editor.png)
