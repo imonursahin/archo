@@ -104,6 +104,8 @@ const api = {
     ipcRenderer.invoke('claude:detect', cwd, sinceMs),
   detectClaudeSessions: (cwd: string, sinceMs: number) =>
     ipcRenderer.invoke('claude:detectMany', cwd, sinceMs),
+  markTerminalRanClaude: (sessionId: string, terminalId: string) =>
+    ipcRenderer.invoke('terminal:ranclaude', sessionId, terminalId),
   setTerminalClaude: (sessionId: string, terminalId: string, claudeId: string) =>
     ipcRenderer.invoke('terminal:setclaude', sessionId, terminalId, claudeId),
   // claude transcripts

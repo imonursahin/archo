@@ -165,6 +165,7 @@ import {
   renameTerminal,
   removeTerminal,
   setTerminalClaude,
+  markTerminalRanClaude,
   readTerminalLog,
   logPathFor
 } from './sessions'
@@ -460,6 +461,9 @@ function registerIpc(): void {
   handle('claude:detect', (cwd: string, sinceMs: number) => detectClaudeSession(cwd, sinceMs))
   handle('claude:detectMany', (cwd: string, sinceMs: number) =>
     detectClaudeSessions(cwd, sinceMs)
+  )
+  handle('terminal:ranclaude', (sessionId: string, terminalId: string) =>
+    markTerminalRanClaude(sessionId, terminalId)
   )
   handle('terminal:setclaude', (sessionId: string, terminalId: string, claudeId: string) =>
     setTerminalClaude(sessionId, terminalId, claudeId)

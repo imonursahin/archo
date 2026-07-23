@@ -70,6 +70,7 @@ function TermInstance({
   const xtermRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const autoStartedRef = useRef(false)
+  const claudeMarkedRef = useRef(false)
   const [dead, setDead] = useState(false)
   const [resumeId, setResumeId] = useState<string | null>(null)
   const [isClaudeTerm, setIsClaudeTerm] = useState(false)
@@ -144,7 +145,53 @@ function TermInstance({
         started.delete(term.id)
       }
     })
-    xterm.onData((d) => window.api.ptyWrite(term.id, d))
+    // Watch typed input for a `claude` invocation so a manually-run claude
+    // (not launched via the button) still gets its session captured and resumes
+    // after a restart. Track a simple line buffer; bail on escape sequences
+    // (arrow/nav keys) which would otherwise corrupt it.
+    let inputLine = ''
+    const markClaudeRun = (): void => {
+      if (claudeMarkedRef.current) return
+      claudeMarkedRef.current = true
+      setIsClaudeTerm(true)
+      window.api.markTerminalRanClaude(sessionId, term.id)
+      if (term.cwd) captureManualClaude(term.cwd)
+    }
+    const captureManualClaude = (cwd: string): void => {
+      const since = Date.now()
+      let tries = 0
+      const timer = setInterval(async () => {
+        tries++
+        const cands = await window.api.detectClaudeSessions(cwd, since)
+        const id = pickClaudeId(cands, since)
+        if (id) {
+          clearInterval(timer)
+          claimedClaude.add(id)
+          setResumeId(id)
+          window.api.setTerminalClaude(sessionId, term.id, id)
+        } else if (tries > 20) {
+          clearInterval(timer)
+        }
+      }, 1500)
+    }
+    xterm.onData((d) => {
+      window.api.ptyWrite(term.id, d)
+      if (claudeMarkedRef.current) return
+      if (d.includes('\x1b')) {
+        inputLine = ''
+        return
+      }
+      for (const ch of d) {
+        if (ch === '\r' || ch === '\n') {
+          if (/^claude(\s|$)/.test(inputLine.trim())) markClaudeRun()
+          inputLine = ''
+        } else if (ch === '\x7f' || ch === '\b') {
+          inputLine = inputLine.slice(0, -1)
+        } else if (ch >= ' ') {
+          inputLine += ch
+        }
+      }
+    })
     // fit reliably even when the container size settles a frame or two after
     // mount (fixes the "half-rendered terminal on resume" until you resize)
     const refit = (): void => {
@@ -171,7 +218,8 @@ function TermInstance({
         // `claude`). Do NOT guess from the cwd: a plain shell terminal in a dir
         // where claude was used before is not a claude terminal.
         const claudeId = term.claudeSessionId || null
-        const claudeish = !!claudeId || (term.command || '').trim().startsWith('claude')
+        const claudeish =
+          !!claudeId || !!term.ranClaude || (term.command || '').trim().startsWith('claude')
         if (claudeish) {
           if (claudeId) claimedClaude.add(claudeId)
           setResumeId(claudeId)

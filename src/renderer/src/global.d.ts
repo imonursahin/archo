@@ -52,6 +52,7 @@ export interface TerminalRec {
   cwd?: string
   command?: string
   claudeSessionId?: string
+  ranClaude?: boolean // claude was run in this terminal (even if typed manually)
 }
 
 export interface TermSession {
@@ -272,6 +273,7 @@ export interface StudioApi {
   detectClaudeSession(cwd: string, sinceMs: number): Promise<string | null>
   detectClaudeSessions(cwd: string, sinceMs: number): Promise<{ id: string; mtime: number }[]>
   setTerminalClaude(sessionId: string, terminalId: string, claudeId: string): Promise<void>
+  markTerminalRanClaude(sessionId: string, terminalId: string): Promise<void>
   listSessions(): Promise<SessionMeta[]>
   readSession(file: string): Promise<SessionMessage[]>
   ptyCreate(id: string, opts: object): void

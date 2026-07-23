@@ -12,6 +12,7 @@ export interface TerminalRec {
   cwd?: string
   command?: string
   claudeSessionId?: string // captured claude session for seamless --resume
+  ranClaude?: boolean // claude was run here (even typed manually) → resume on restart
 }
 
 export interface TermSession {
@@ -208,9 +209,30 @@ export async function setTerminalClaude(
   const s = list.find((x) => x.id === sessionId)
   if (!s) return
   s.terminals = s.terminals.map((t) =>
-    t.id === terminalId ? { ...t, claudeSessionId } : t
+    t.id === terminalId ? { ...t, claudeSessionId, ranClaude: true } : t
   )
   await persist(list)
+}
+
+// Mark that claude was run in this terminal even before its session id is known
+// (e.g. the user typed `claude` manually). Ensures it resumes on restart instead
+// of being restarted as a plain shell.
+export async function markTerminalRanClaude(
+  sessionId: string,
+  terminalId: string
+): Promise<void> {
+  const list = await load()
+  const s = list.find((x) => x.id === sessionId)
+  if (!s) return
+  let changed = false
+  s.terminals = s.terminals.map((t) => {
+    if (t.id === terminalId && !t.ranClaude) {
+      changed = true
+      return { ...t, ranClaude: true }
+    }
+    return t
+  })
+  if (changed) await persist(list)
 }
 
 export async function removeTerminal(sessionId: string, terminalId: string): Promise<void> {
