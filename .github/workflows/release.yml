@@ -1,0 +1,51 @@
+name: Release
+
+# Fully automatic releases: bump "version" in package.json and push to master.
+# CI builds the macOS installers and publishes a GitHub Release. Commits that
+# don't change the version are ignored (the release for that version already
+# exists), so day-to-day pushes never trigger a build.
+
+on:
+  push:
+    branches: [master]
+    paths: ['package.json']
+
+permissions:
+  contents: write # needed to create the release + tag
+
+jobs:
+  release:
+    runs-on: macos-latest # arm64 runner → arm64 build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: echo "v=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version was already released
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.ver.outputs.v }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.ver.outputs.v }} already released — skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'false'
+        with:
+          node-version: 20
+
+      - name: Install deps (rebuilds node-pty for the runner)
+        if: steps.check.outputs.exists == 'false'
+        run: npm ci
+
+      - name: Build & publish release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # electron-builder github publisher
+        run: npm run release

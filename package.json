@@ -27,7 +27,9 @@
       "identity": null,
       "target": ["dmg", "zip"]
     },
-    "publish": [{ "provider": "github", "owner": "imonursahin", "repo": "archo" }]
+    "publish": [
+      { "provider": "github", "owner": "imonursahin", "repo": "archo", "releaseType": "release" }
+    ]
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",

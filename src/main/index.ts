@@ -13,19 +13,15 @@ import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import https from 'https'
 
 const pexec = promisify(execFile)
 
-// ---- update check via the user's authenticated `gh` CLI (no embedded token;
-// works with a private repo). Compares the latest GitHub release to this app's
-// version. Unsigned macOS can't silent-install, so we notify + open the page.
+// ---- update check. Primary path is the public GitHub Releases API (no auth,
+// works for every user of the open-source build). Falls back to the local `gh`
+// CLI if the API is unreachable or the repo is still private. Unsigned macOS
+// can't silent-install, so we notify + open the release page.
 const UPDATE_REPO = 'imonursahin/archo'
-
-function ghEnv(): NodeJS.ProcessEnv {
-  const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
-  const existing = (process.env.PATH || '').split(':')
-  return { ...process.env, PATH: [...new Set([...existing, ...extra])].join(':') }
-}
 
 function verGt(a: string, b: string): boolean {
   const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
@@ -37,6 +33,48 @@ function verGt(a: string, b: string): boolean {
   return false
 }
 
+function httpsJson(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    https
+      .get(
+        url,
+        { headers: { 'User-Agent': 'Archo', Accept: 'application/vnd.github+json' } },
+        (res) => {
+          if (res.statusCode && res.statusCode >= 400) {
+            res.resume()
+            reject(new Error(`HTTP ${res.statusCode}`))
+            return
+          }
+          let data = ''
+          res.on('data', (c) => (data += c))
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data))
+            } catch (e) {
+              reject(e)
+            }
+          })
+        }
+      )
+      .on('error', reject)
+  })
+}
+
+async function latestViaGh(): Promise<{ tag: string; url: string }> {
+  const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
+  const env = {
+    ...process.env,
+    PATH: [...new Set([...(process.env.PATH || '').split(':'), ...extra])].join(':')
+  }
+  const { stdout } = await pexec(
+    'gh',
+    ['release', 'view', '--repo', UPDATE_REPO, '--json', 'tagName,url'],
+    { env }
+  )
+  const j = JSON.parse(stdout)
+  return { tag: String(j.tagName || ''), url: String(j.url || '') }
+}
+
 async function checkUpdate(): Promise<{
   current: string
   latest?: string
@@ -45,19 +83,29 @@ async function checkUpdate(): Promise<{
   error?: string
 }> {
   const current = app.getVersion()
+  let tag = ''
+  let url = ''
+  let err = ''
   try {
-    const { stdout } = await pexec(
-      'gh',
-      ['release', 'view', '--repo', UPDATE_REPO, '--json', 'tagName,url'],
-      { env: ghEnv() }
-    )
-    const j = JSON.parse(stdout)
-    const latest = String(j.tagName || '').replace(/^v/, '')
-    return { current, latest, url: j.url, hasUpdate: !!latest && verGt(latest, current) }
+    // public releases API — no token, works once the repo is public
+    const j = await httpsJson(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`)
+    tag = String(j.tag_name || '')
+    url = String(j.html_url || '')
   } catch (e: any) {
-    // no releases yet, gh missing, or not authed
-    return { current, hasUpdate: false, error: String(e?.stderr || e?.message || e).slice(0, 200) }
+    err = String(e?.message || e)
+    // fallback: local authenticated gh (covers a still-private repo)
+    try {
+      const g = await latestViaGh()
+      tag = g.tag
+      url = g.url
+      err = ''
+    } catch (e2: any) {
+      err = String(e2?.stderr || e2?.message || e2 || err)
+    }
   }
+  const latest = tag.replace(/^v/, '')
+  if (!latest) return { current, hasUpdate: false, error: err.slice(0, 200) }
+  return { current, latest, url, hasUpdate: verGt(latest, current) }
 }
 
 // App name = Archo, but keep the data store where it already lives (userData
