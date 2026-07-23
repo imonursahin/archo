@@ -96,6 +96,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   },
   testNotifBtn: { en: 'Send test notification', tr: 'Test bildirimi gönder' },
   version: { en: 'Version', tr: 'Sürüm' },
+  developer: { en: 'Developer', tr: 'Geliştirici' },
   checkUpdate: { en: 'Check for updates', tr: 'Güncellemeleri denetle' },
   checkingUpdate: { en: 'Checking…', tr: 'Denetleniyor…' },
   updateAvailable: { en: 'Update available', tr: 'Güncelleme var' },

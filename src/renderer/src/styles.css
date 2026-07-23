@@ -3961,6 +3961,17 @@ textarea {
 .update-status a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .update-status a:hover { text-decoration: underline; }
 
+.settings-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.settings-links a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.settings-links a:hover { text-decoration: underline; }
+.settings-links .dot { color: var(--muted); }
+.settings-links-handle { color: var(--muted); margin-left: 4px; }
+
 /* session list: running spinner */
 .ss-spinner {
   flex: 0 0 auto;

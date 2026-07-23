@@ -82,6 +82,30 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
 
             <label className="modal-label">{t('version')}</label>
             <UpdateRow />
+
+            <label className="modal-label">{t('developer')}</label>
+            <div className="settings-links">
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault()
+                  window.api.openExternal('https://github.com/imonursahin')
+                }}
+              >
+                GitHub
+              </a>
+              <span className="dot">·</span>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault()
+                  window.api.openExternal('https://www.linkedin.com/in/imonursahin')
+                }}
+              >
+                LinkedIn
+              </a>
+              <span className="settings-links-handle">@imonursahin</span>
+            </div>
           </>
         )}
 
