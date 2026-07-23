@@ -99,8 +99,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   developer: { en: 'Developer', tr: 'Geliştirici' },
   keepAwake: { en: 'Keep awake', tr: 'Uyanık tut' },
   keepAwakeHint: {
-    en: 'Stops your Mac from sleeping while tasks run',
-    tr: "Mac'i işler sürerken uyutmaz"
+    en: 'Keeps your computer awake — screen stays on, no sleep',
+    tr: 'Bilgisayarı açık tutar — ekran kapanmaz, uykuya geçmez'
   },
   checkUpdate: { en: 'Check for updates', tr: 'Güncellemeleri denetle' },
   checkingUpdate: { en: 'Checking…', tr: 'Denetleniyor…' },
