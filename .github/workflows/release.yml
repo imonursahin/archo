@@ -44,8 +44,19 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: npm ci
 
-      - name: Build & publish release
+      - name: Build installers
+        if: steps.check.outputs.exists == 'false'
+        run: npm run dist # electron-builder without publish → dist/*.dmg, *.zip, latest-mac.yml
+
+      - name: Publish release
         if: steps.check.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # electron-builder github publisher
-        run: npm run release
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.v }}" \
+            dist/Archo-*-arm64.dmg \
+            dist/Archo-*-arm64-mac.zip \
+            dist/latest-mac.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Archo ${{ steps.ver.outputs.v }}" \
+            --generate-notes
