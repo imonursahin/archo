@@ -12,6 +12,8 @@ Archo is a control center for Claude Code. Create assistants — each backed by 
 
 Built with Electron, React, and TypeScript.
 
+![Archo — assistants home](docs/screenshots/home.png)
+
 ---
 
 ## Features
@@ -58,6 +60,20 @@ Built with Electron, React, and TypeScript.
 - Desktop notifications when a run finishes, waits, or stops — click to jump straight to that session; in-app toasts for app events
 - Dark / light theme and English / Turkish UI
 - Automatic update check against GitHub Releases
+
+---
+
+## Screenshots
+
+**Workbench** — resources on the left, sessions in the middle, live usage at a glance.
+
+![Workbench](docs/screenshots/workbench.png)
+
+**Resource editor** — edit a skill's or agent's frontmatter and Markdown, with Edit / Preview / Raw modes.
+
+![Skill editor](docs/screenshots/editor.png)
+
+![Agent editor](docs/screenshots/agent.png)
 
 ---
 

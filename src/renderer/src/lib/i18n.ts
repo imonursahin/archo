@@ -386,7 +386,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   toastNothingToReplace: { en: 'No match to replace', tr: 'Değiştirilecek eşleşme yok' }
 }
 
-let current: Lang = (localStorage.getItem('lang') as Lang) || 'en'
+// Default UI language is English; only an explicit stored 'tr' switches to Turkish.
+let current: Lang = localStorage.getItem('lang') === 'tr' ? 'tr' : 'en'
 
 export function getLang(): Lang {
   return current
