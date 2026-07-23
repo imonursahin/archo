@@ -97,6 +97,11 @@ const DICT: Record<string, { en: string; tr: string }> = {
   testNotifBtn: { en: 'Send test notification', tr: 'Test bildirimi gönder' },
   version: { en: 'Version', tr: 'Sürüm' },
   developer: { en: 'Developer', tr: 'Geliştirici' },
+  keepAwake: { en: 'Keep awake', tr: 'Uyanık tut' },
+  keepAwakeHint: {
+    en: 'Stops your Mac from sleeping while tasks run',
+    tr: "Mac'i işler sürerken uyutmaz"
+  },
   checkUpdate: { en: 'Check for updates', tr: 'Güncellemeleri denetle' },
   checkingUpdate: { en: 'Checking…', tr: 'Denetleniyor…' },
   updateAvailable: { en: 'Update available', tr: 'Güncelleme var' },

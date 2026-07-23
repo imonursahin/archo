@@ -31,6 +31,7 @@ export default function App(): JSX.Element {
   const [showAssistantModal, setShowAssistantModal] = useState(false)
   const [showUsage, setShowUsage] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [caffeine, setCaffeine] = useState(false)
   const [, forceRender] = useState(0)
   const [dropped, setDropped] = useState<{ name: string; content: string } | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -356,6 +357,13 @@ export default function App(): JSX.Element {
           </span>
         </span>
         <div className="right">
+          <button
+            className={`btn icon-btn caffeine-btn ${caffeine ? 'on' : ''}`}
+            onClick={async () => setCaffeine(await window.api.setCaffeine(!caffeine))}
+            title={t('keepAwakeHint')}
+          >
+            ☕ {t('keepAwake')}
+          </button>
           <button className="btn icon-btn" onClick={() => setShowUsage(true)} title={t('usageAndCost')}>
             <Icon name="usage" /> {t('usage')}
           </button>

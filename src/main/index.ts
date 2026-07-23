@@ -6,7 +6,8 @@ import {
   dialog,
   clipboard,
   Notification,
-  nativeImage
+  nativeImage,
+  powerSaveBlocker
 } from 'electron'
 import fs from 'fs'
 import os from 'os'
@@ -22,6 +23,9 @@ const pexec = promisify(execFile)
 // CLI if the API is unreachable or the repo is still private. Unsigned macOS
 // can't silent-install, so we notify + open the release page.
 const UPDATE_REPO = 'imonursahin/archo'
+
+// keep-awake (powerSaveBlocker) id; -1 when off. Off on every launch.
+let caffeineId = -1
 
 function verGt(a: string, b: string): boolean {
   const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
@@ -421,6 +425,20 @@ function registerIpc(): void {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url)
   })
   handle('term:find', (termId: string) => findTerminal(termId))
+  // keep-awake toggle: prevent display/system sleep while long tasks run
+  // (like `caffeinate -d`). Released automatically when the app quits.
+  handle('caffeine:set', (on: boolean) => {
+    if (on) {
+      if (caffeineId < 0 || !powerSaveBlocker.isStarted(caffeineId)) {
+        caffeineId = powerSaveBlocker.start('prevent-display-sleep')
+      }
+    } else if (caffeineId >= 0 && powerSaveBlocker.isStarted(caffeineId)) {
+      powerSaveBlocker.stop(caffeineId)
+      caffeineId = -1
+    }
+    return caffeineId >= 0 && powerSaveBlocker.isStarted(caffeineId)
+  })
+  handle('caffeine:get', () => caffeineId >= 0 && powerSaveBlocker.isStarted(caffeineId))
   handle('update:check', () => checkUpdate())
   handle('git:branch', (dir: string) => gitBranch(dir))
   handle('session:usage', (cwd: string, sessionId: string) => sessionUsage(cwd, sessionId))

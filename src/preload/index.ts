@@ -140,7 +140,9 @@ const api = {
     return () => ipcRenderer.removeListener('pty:done', h)
   },
   findTerminal: (termId: string) => ipcRenderer.invoke('term:find', termId),
-  checkUpdate: () => ipcRenderer.invoke('update:check')
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  setCaffeine: (on: boolean) => ipcRenderer.invoke('caffeine:set', on),
+  getCaffeine: () => ipcRenderer.invoke('caffeine:get')
 }
 
 contextBridge.exposeInMainWorld('api', api)

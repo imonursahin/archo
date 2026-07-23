@@ -297,6 +297,8 @@ export interface StudioApi {
     hasUpdate: boolean
     error?: string
   }>
+  setCaffeine(on: boolean): Promise<boolean>
+  getCaffeine(): Promise<boolean>
 }
 
 declare global {

@@ -2393,6 +2393,11 @@ textarea {
 .icon-btn svg {
   flex: 0 0 auto;
 }
+.caffeine-btn.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
 .ac-open {
   display: flex;
   align-items: center;
