@@ -53,7 +53,7 @@ const api = {
     ipcRenderer.invoke('termsession:rename', id, name),
   updateSessionMeta: (
     id: string,
-    patch: { note?: string; tags?: string[]; pinned?: boolean; cwd?: string }
+    patch: { note?: string; tags?: string[]; pinned?: boolean; bg?: string; cwd?: string }
   ) => ipcRenderer.invoke('termsession:meta', id, patch),
   pickDir: (defaultPath?: string) => ipcRenderer.invoke('dir:pick', defaultPath),
   setSessionCwd: (id: string, cwd: string) => ipcRenderer.invoke('session:setCwd', id, cwd),

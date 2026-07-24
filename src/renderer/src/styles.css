@@ -3472,13 +3472,24 @@ textarea {
 }
 
 /* session pin button */
-.ss-pin {
+.ss-pin,
+.ss-color {
   flex: 0 0 auto;
   font-size: 12px;
   opacity: 0.28;
   filter: grayscale(1);
   transition: opacity 0.1s, filter 0.1s, transform 0.1s;
   padding: 0 2px;
+}
+.ss-color {
+  filter: none;
+  color: var(--muted);
+}
+.ss-item:hover .ss-color {
+  opacity: 0.8;
+}
+.ss-item.tinted .ss-item-name {
+  color: #f0f0f2;
 }
 .ss-item:hover .ss-pin {
   opacity: 0.7;

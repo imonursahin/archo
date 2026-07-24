@@ -65,6 +65,7 @@ export interface TermSession {
   note?: string
   tags?: string[]
   pinned?: boolean
+  bg?: string
   cwd?: string
   checkpoints?: { sha: string; message: string; time: number }[]
   model?: string
@@ -210,6 +211,7 @@ export interface StudioApi {
       note?: string
       tags?: string[]
       pinned?: boolean
+      bg?: string
       cwd?: string
       model?: string
       effort?: string

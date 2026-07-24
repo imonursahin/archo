@@ -25,6 +25,7 @@ export interface TermSession {
   note?: string
   tags?: string[]
   pinned?: boolean
+  bg?: string // custom session color
   cwd?: string // working directory for this session's terminals (target repo)
   checkpoints?: { sha: string; message: string; time: number }[]
   model?: string // preferred claude model for this session (opus/sonnet/haiku)
@@ -98,6 +99,7 @@ export async function updateSessionMeta(
     note?: string
     tags?: string[]
     pinned?: boolean
+    bg?: string
     cwd?: string
     model?: string
     effort?: string
@@ -112,6 +114,7 @@ export async function updateSessionMeta(
             ...(patch.note !== undefined ? { note: patch.note } : {}),
             ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
             ...(patch.pinned !== undefined ? { pinned: patch.pinned } : {}),
+            ...(patch.bg !== undefined ? { bg: patch.bg || undefined } : {}),
             ...(patch.cwd !== undefined ? { cwd: patch.cwd } : {}),
             ...(patch.model !== undefined ? { model: patch.model } : {}),
             ...(patch.effort !== undefined ? { effort: patch.effort } : {})

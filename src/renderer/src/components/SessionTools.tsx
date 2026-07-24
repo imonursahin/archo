@@ -9,7 +9,7 @@ import {
   type SavedPrompt
 } from '../lib/prefs'
 import { toast } from '../lib/toast'
-import { t, ti } from '../lib/i18n'
+import { t, ti, fmtDuration } from '../lib/i18n'
 import Icon from './Icon'
 
 interface Props {
@@ -271,7 +271,7 @@ export default function SessionTools({
             {usage.durationMs > 0 && (
               <>
                 <span className="st-budget-sep">·</span>
-                {Math.round(usage.durationMs / 60000)}dk
+                {fmtDuration(usage.durationMs)}
               </>
             )}
           </span>

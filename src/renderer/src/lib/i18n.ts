@@ -97,6 +97,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   testNotifBtn: { en: 'Send test notification', tr: 'Test bildirimi gönder' },
   version: { en: 'Version', tr: 'Sürüm' },
   developer: { en: 'Developer', tr: 'Geliştirici' },
+  color: { en: 'Color', tr: 'Renk' },
   keepAwake: { en: 'Keep awake', tr: 'Uyanık tut' },
   keepAwakeHint: {
     en: 'Keeps your computer awake — screen stays on, no sleep',
@@ -474,4 +475,22 @@ export function ti(key: keyof typeof DICT | string, vars: Record<string, string 
   let s = t(key)
   for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v))
   return s
+}
+
+// Localized, magnitude-aware duration: seconds → minutes → hours(+min) → days(+h).
+export function fmtDuration(ms: number): string {
+  const tr = current === 'tr'
+  const U = tr ? { s: 'sn', m: 'dk', h: 'sa', d: 'g' } : { s: 's', m: 'm', h: 'h', d: 'd' }
+  const sec = Math.max(0, Math.floor(ms / 1000))
+  if (sec < 60) return `${sec}${U.s}`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}${U.m}`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) {
+    const rm = min % 60
+    return rm ? `${hr}${U.h} ${rm}${U.m}` : `${hr}${U.h}`
+  }
+  const d = Math.floor(hr / 24)
+  const rh = hr % 24
+  return rh ? `${d}${U.d} ${rh}${U.h}` : `${d}${U.d}`
 }

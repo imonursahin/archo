@@ -460,7 +460,7 @@ function registerIpc(): void {
   handle('termsession:rename', (id: string, name: string) => renameSession(id, name))
   handle(
     'termsession:meta',
-    (id: string, patch: { note?: string; tags?: string[]; pinned?: boolean }) =>
+    (id: string, patch: { note?: string; tags?: string[]; pinned?: boolean; bg?: string }) =>
       updateSessionMeta(id, patch)
   )
   handle('termsession:delete', (id: string) => deleteSession(id))

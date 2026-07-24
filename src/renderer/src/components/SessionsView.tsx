@@ -398,6 +398,7 @@ export default function SessionsView({
   const [editingTab, setEditingTab] = useState<string | null>(null)
   const [tabRect, setTabRect] = useState<DOMRect | null>(null)
   const [sessQuery, setSessQuery] = useState('')
+  const [sessColor, setSessColor] = useState<{ id: string; rect: DOMRect } | null>(null)
   const [splitId, setSplitId] = useState<string | null>(null) // second pane for split view
   const [tagInput, setTagInput] = useState('')
 
@@ -469,6 +470,11 @@ export default function SessionsView({
     const pinned = !s.pinned
     setSessions((list) => list.map((x) => (x.id === s.id ? { ...x, pinned } : x)))
     await window.api.updateSessionMeta(s.id, { pinned })
+  }
+
+  async function setSessBg(id: string, bg: string): Promise<void> {
+    setSessions((list) => list.map((x) => (x.id === id ? { ...x, bg: bg || undefined } : x)))
+    await window.api.updateSessionMeta(id, { bg })
   }
 
   function reload(): void {
@@ -657,12 +663,24 @@ export default function SessionsView({
               {g.items.map((s) => (
                 <div
                   key={s.id}
-                  className={`ss-item ${open?.id === s.id ? 'active' : ''}`}
+                  className={`ss-item ${open?.id === s.id ? 'active' : ''} ${s.bg ? 'tinted' : ''}`}
+                  style={s.bg ? { background: s.bg } : undefined}
                   onClick={() => enter(s)}
                 >
                   <div className="ss-item-top">
                     <span className="slv-icon">▤</span>
                     <span className="ss-item-name">{s.name}</span>
+                    <button
+                      className="ss-color"
+                      title={t('color')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setSessColor((c) => (c?.id === s.id ? null : { id: s.id, rect }))
+                      }}
+                    >
+                      ◐
+                    </button>
                     <button
                       className={`ss-pin ${s.pinned ? 'on' : ''}`}
                       title={s.pinned ? t('unpin') : t('pin')}
@@ -683,6 +701,32 @@ export default function SessionsView({
                       ×
                     </button>
                   </div>
+                  {sessColor?.id === s.id && (
+                    <div
+                      className="tab-colors"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        position: 'fixed',
+                        top: sessColor.rect.bottom + 4,
+                        left: sessColor.rect.left
+                      }}
+                    >
+                      {TAB_BGS.map((c) => (
+                        <button
+                          key={c || 'default'}
+                          className={`tab-color ${(s.bg || '') === c ? 'sel' : ''}`}
+                          style={{ background: c || 'var(--bg, #0a0a0c)' }}
+                          title={c || 'default'}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSessBg(s.id, c)
+                            setSessColor(null)
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                   <div className="ss-item-meta">
                     {ti('nTerminal', { n: s.terminals.length })} · {relTime(s.createdAt)}
                   </div>

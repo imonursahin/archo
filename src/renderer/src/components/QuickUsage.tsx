@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { UsageReport } from '../global'
 import { getPrefs } from '../lib/prefs'
-import { t, ti } from '../lib/i18n'
+import { t, ti, fmtDuration } from '../lib/i18n'
 
 interface Props {
   onOpen: () => void
@@ -15,9 +15,7 @@ function fmtCost(n: number): string {
 function until(target: number): string {
   const diff = target - Date.now()
   if (diff <= 0) return t('relNow')
-  const h = Math.floor(diff / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  return h > 0 ? `${h}sa ${m}dk` : `${m}dk`
+  return fmtDuration(diff)
 }
 function barColor(pct: number): string {
   if (pct >= 90) return 'var(--red)'
