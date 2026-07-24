@@ -1860,6 +1860,11 @@ textarea {
   padding: 4px 10px; /* breathing room so text isn't flush to the edges */
   background: #0a0a0c;
 }
+/* keep the scrollbar at the very right edge — the host's right padding pads the
+   text, but we pull the scroll viewport back out so the bar isn't inset */
+.xterm-host .xterm-viewport {
+  right: -10px !important;
+}
 .term-dead {
   position: absolute;
   inset: 0;
@@ -2797,6 +2802,9 @@ textarea {
 .term-tab.active {
   background: #0a0a0c;
   color: #e8e8ea;
+}
+.term-tab.tinted.active {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 .term-tab input {
   color: #e8e8ea;

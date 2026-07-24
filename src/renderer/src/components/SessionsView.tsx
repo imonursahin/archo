@@ -30,8 +30,8 @@ const theme = {
 // terminals whose PTY was started during this app run
 const started = new Set<string>()
 
-// preset terminal background colors (first = default/none)
-const TAB_BGS = ['', '#17171b', '#0d1524', '#0e1a12', '#170e1f', '#1c1012', '#08191a', '#1a140a']
+// preset tab colors (first = default/none) — muted but visible on the dark tab bar
+const TAB_BGS = ['', '#3a3a42', '#2b4a6f', '#265c43', '#4a2f6b', '#6b2f38', '#6b5320', '#245b5e']
 // claude session ids already assigned to a terminal (so two terminals in the
 // same folder never resume the SAME conversation)
 const claimedClaude = new Set<string>()
@@ -84,7 +84,7 @@ function TermInstance({
     const xterm = new Terminal({
       fontFamily: "'SF Mono', ui-monospace, Menlo, monospace",
       fontSize: 12.5,
-      theme: { ...theme, background: term.bg || theme.background },
+      theme,
       cursorBlink: true,
       allowProposedApi: true,
       scrollback: 5000
@@ -105,7 +105,7 @@ function TermInstance({
       return `rgb:${r}${r}/${g}${g}/${b}${b}`
     }
     xterm.parser.registerOscHandler(11, (d) => {
-      if (d === '?') window.api.ptyWrite(term.id, `\x1b]11;${oscColor(term.bg || theme.background)}\x07`)
+      if (d === '?') window.api.ptyWrite(term.id, `\x1b]11;${oscColor(theme.background)}\x07`)
       return true
     })
     xterm.parser.registerOscHandler(10, (d) => {
@@ -334,12 +334,6 @@ function TermInstance({
     xtermRef.current?.focus()
   }
 
-  // apply a custom background color live (without remounting the terminal)
-  useEffect(() => {
-    const x = xtermRef.current
-    if (x) x.options.theme = { ...theme, background: term.bg || theme.background }
-  }, [term.bg])
-
   // a plain (non-claude) dead terminal → auto-start a fresh shell the first time
   // it's viewed, so you can just type (history stays visible above). A later
   // manual `exit` won't re-spawn (shows the restart bar instead).
@@ -353,11 +347,7 @@ function TermInstance({
 
   return (
     <div className={`xterm-wrap ${visible ? '' : 'hidden'}`}>
-      <div
-        className="xterm-host"
-        ref={hostRef}
-        style={term.bg ? { background: term.bg } : undefined}
-      />
+      <div className="xterm-host" ref={hostRef} />
       {/* claude: centered resume card (no meaningful scrollback to show) */}
       {dead && isClaudeTerm && (
         <div className="term-dead">
@@ -794,7 +784,8 @@ export default function SessionsView({
               {open.terminals.map((t) => (
                 <div
                   key={t.id}
-                  className={`term-tab ${active === t.id ? 'active' : ''}`}
+                  className={`term-tab ${active === t.id ? 'active' : ''} ${t.bg ? 'tinted' : ''}`}
+                  style={t.bg ? { background: t.bg, color: '#f0f0f2' } : undefined}
                   onClick={() => setActive(t.id)}
                   onDoubleClick={(e) => {
                     setEditingTab(t.id)
