@@ -113,6 +113,8 @@ const api = {
   // claude transcripts
   listSessions: () => ipcRenderer.invoke('sessions:list'),
   readSession: (file: string) => ipcRenderer.invoke('session:read', file),
+  searchTranscripts: (query: string, scope?: string[]) =>
+    ipcRenderer.invoke('transcripts:search', query, scope),
   // pty
   ptyCreate: (id: string, opts: object) => ipcRenderer.send('pty:create', id, opts),
   ptyWrite: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
@@ -146,7 +148,14 @@ const api = {
   setCaffeine: (on: boolean) => ipcRenderer.invoke('caffeine:set', on),
   getCaffeine: () => ipcRenderer.invoke('caffeine:get'),
   getVersion: () => ipcRenderer.invoke('app:version'),
-  relaunch: () => ipcRenderer.invoke('app:relaunch')
+  relaunch: () => ipcRenderer.invoke('app:relaunch'),
+  canBrewUpdate: () => ipcRenderer.invoke('update:canBrew'),
+  runUpdate: () => ipcRenderer.send('update:run'),
+  onUpdateOutput: (cb: (p: { line?: string; done?: boolean; ok?: boolean }) => void) => {
+    const h = (_e: unknown, p: { line?: string; done?: boolean; ok?: boolean }): void => cb(p)
+    ipcRenderer.on('update:output', h)
+    return () => ipcRenderer.removeListener('update:output', h)
+  }
 }
 
 contextBridge.exposeInMainWorld('api', api)

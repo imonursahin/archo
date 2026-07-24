@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { bus, type OpenTermRequest } from '../lib/bus'
 import SessionTools from './SessionTools'
+import Icon from './Icon'
 import { t, ti, getLang } from '../lib/i18n'
 import type { Assistant, TermSession, TerminalRec } from '../global'
 
@@ -114,7 +115,14 @@ function TermInstance({
     })
 
     // Cmd+C copies the selection (Ctrl+C stays SIGINT); Cmd+V pastes.
+    // Shift+Enter inserts a newline (Claude reads ESC-CR as a soft newline).
     xterm.attachCustomKeyEventHandler((e) => {
+      if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
+        // backslash line-continuation: Claude Code turns a trailing `\` + Enter
+        // into a newline (works whether the line is empty or has text).
+        window.api.ptyWrite(term.id, '\\\r')
+        return false
+      }
       if (e.type !== 'keydown' || !e.metaKey) return true
       if (e.key === 'c' && xterm.hasSelection()) {
         navigator.clipboard.writeText(xterm.getSelection())
@@ -641,7 +649,10 @@ export default function SessionsView({
         <div className="ss-left-head">
           <h2>{t('sessions')}</h2>
         </div>
-        <div className="ss-search">
+        <div className="search ss-search">
+          <span className="search-ic">
+            <Icon name="search" size={14} />
+          </span>
           <input
             placeholder={t('searchSessionPh')}
             value={sessQuery}
@@ -664,7 +675,7 @@ export default function SessionsView({
                   key={s.id}
                   className={`ss-item ${open?.id === s.id ? 'active' : ''} ${s.bg ? 'tinted' : ''}`}
                   style={s.bg ? { background: s.bg } : undefined}
-                  onClick={() => enter(s)}
+                  onClick={() => (open?.id === s.id ? setOpen(null) : enter(s))}
                 >
                   <div className="ss-item-top">
                     <span className="slv-icon">▤</span>

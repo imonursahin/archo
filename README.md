@@ -57,6 +57,7 @@ Built with Electron, React, and TypeScript.
 
 ### Everywhere
 - Command palette (⌘K) and find & replace (⌘⇧F)
+- Full-text search across every Claude conversation (⌘⇧P) — find any answer, jump to that moment, and scope to one assistant or all projects
 - Keep-awake toggle to stop your Mac from sleeping during long runs
 - Desktop notifications when a run finishes, waits, or stops — click to jump straight to that session; in-app toasts for app events
 - Dark / light theme and English / Turkish UI
@@ -99,6 +100,14 @@ Built with Electron, React, and TypeScript.
 **MCP** — configure servers at global and project scope, test the connection, and browse or run their tools.
 
 ![MCP panel](docs/screenshots/mcp.png)
+
+**Search every conversation** — full-text search across all your Claude transcripts; scope to one assistant or all projects, and jump straight to the match.
+
+![Transcript search](docs/screenshots/transcript-search.png)
+
+Click a result to open the full conversation, with every match highlighted.
+
+![Transcript detail](docs/screenshots/transcript-detail.png)
 
 ---
 

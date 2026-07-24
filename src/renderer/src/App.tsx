@@ -8,6 +8,8 @@ import AssistantModal from './components/AssistantModal'
 import CreateModal from './components/CreateModal'
 import UsagePanel from './components/UsagePanel'
 import SettingsModal from './components/SettingsModal'
+import UpdateModal, { type UpdateInfo } from './components/UpdateModal'
+import TranscriptSearch from './components/TranscriptSearch'
 import CommandPalette, { type Command } from './components/CommandPalette'
 import FindReplace from './components/FindReplace'
 import Icon from './components/Icon'
@@ -32,11 +34,19 @@ export default function App(): JSX.Element {
   const [showUsage, setShowUsage] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [caffeine, setCaffeine] = useState(false)
+  const [update, setUpdate] = useState<UpdateInfo | null>(null)
+  const [showUpdate, setShowUpdate] = useState(false)
+  useEffect(() => {
+    window.api.checkUpdate().then((r) => {
+      if (r.hasUpdate) setUpdate({ current: r.current, latest: r.latest, url: r.url, notes: r.notes })
+    })
+  }, [])
   const [, forceRender] = useState(0)
   const [dropped, setDropped] = useState<{ name: string; content: string } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
   const [showFind, setShowFind] = useState(false)
+  const [showTranscripts, setShowTranscripts] = useState(false)
   const [pendingOpen, setPendingOpen] = useState<{
     sessionId: string
     terminalId?: string
@@ -75,6 +85,10 @@ export default function App(): JSX.Element {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         setShowFind((v) => !v)
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        setShowTranscripts((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -167,6 +181,12 @@ export default function App(): JSX.Element {
       })
     }
     cmds.push(
+      {
+        id: 'search-transcripts',
+        group: t('cmdGroupAction'),
+        label: t('searchTranscripts'),
+        run: () => setShowTranscripts(true)
+      },
       { id: 'usage', group: t('cmdGroupAction'), label: t('cmdUsage'), run: () => setShowUsage(true) },
       { id: 'settings', group: t('cmdGroupAction'), label: t('cmdSettings'), run: () => setShowSettings(true) },
       {
@@ -292,6 +312,9 @@ export default function App(): JSX.Element {
             const r = await window.api.exportAssistant(a.id, appState)
             if (r.ok) toast(ti('toastExported', { name: a.name }), 'success')
           }}
+          update={update}
+          onShowUpdate={() => setShowUpdate(true)}
+          onSearchTranscripts={() => setShowTranscripts(true)}
           onDelete={(a) => {
             if (
               confirm(
@@ -321,6 +344,10 @@ export default function App(): JSX.Element {
         {showUsage && <UsagePanel onClose={() => setShowUsage(false)} />}
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onChange={() => forceRender((x) => x + 1)} />}
         {showPalette && <CommandPalette commands={commands} onClose={() => setShowPalette(false)} />}
+        {showUpdate && update && (
+          <UpdateModal info={update} onClose={() => setShowUpdate(false)} />
+        )}
+        {showTranscripts && <TranscriptSearch onClose={() => setShowTranscripts(false)} />}
         <ToastHost />
       </div>
     )
@@ -358,6 +385,11 @@ export default function App(): JSX.Element {
           </span>
         </span>
         <div className="right">
+          {update && (
+            <button className="btn icon-btn update-badge" onClick={() => setShowUpdate(true)}>
+              ↑ {ti('updateReadyBadge', { v: update.latest || '' })}
+            </button>
+          )}
           <button
             className={`btn icon-btn caffeine-btn ${caffeine ? 'on' : ''}`}
             onClick={async () => setCaffeine(await window.api.setCaffeine(!caffeine))}
@@ -365,6 +397,13 @@ export default function App(): JSX.Element {
             aria-label={t('keepAwakeHint')}
           >
             ☕ {t('keepAwake')}
+          </button>
+          <button
+            className="btn icon-btn"
+            onClick={() => setShowTranscripts(true)}
+            title={t('searchTranscripts')}
+          >
+            <Icon name="search" />
           </button>
           <button className="btn icon-btn" onClick={() => setShowUsage(true)} title={t('usageAndCost')}>
             <Icon name="usage" /> {t('usage')}
@@ -452,6 +491,15 @@ export default function App(): JSX.Element {
             setSelected(item)
             setShowFind(false)
           }}
+        />
+      )}
+      {showUpdate && update && (
+        <UpdateModal info={update} onClose={() => setShowUpdate(false)} />
+      )}
+      {showTranscripts && (
+        <TranscriptSearch
+          onClose={() => setShowTranscripts(false)}
+          assistant={{ id: active.id, baseDir: active.baseDir }}
         />
       )}
       <ToastHost />

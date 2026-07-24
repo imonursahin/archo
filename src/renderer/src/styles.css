@@ -293,6 +293,8 @@ textarea {
   padding: 11px 18px;
   font-size: 14px;
   border-radius: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .assistant-grid {
   max-width: 1100px;
@@ -1353,7 +1355,7 @@ textarea {
   gap: 7px;
   margin: 0 10px 8px;
   padding: 8px;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--muted);
   font-size: 12.5px;
@@ -1666,14 +1668,19 @@ textarea {
   color: #fff;
 }
 .ss-search {
-  padding: 0 14px 8px;
+  padding: 0 14px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.ss-search .search-ic {
+  left: 24px;
 }
 .ss-search input {
   width: 100%;
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: 7px;
-  padding: 7px 10px;
+  padding: 7px 10px 7px 32px;
   color: var(--text);
   font-size: 12px;
   outline: none;
@@ -1684,13 +1691,15 @@ textarea {
 .ss-new {
   margin: 0 14px 10px;
   padding: 8px;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--muted);
   font-size: 12.5px;
 }
 .ss-new:hover {
   border-color: var(--accent);
+  border-style: solid;
+  background: var(--accent-dim);
   color: var(--accent);
 }
 .ss-list {
@@ -2088,13 +2097,14 @@ textarea {
   margin-top: 4px;
   font-size: 12px;
   color: var(--muted);
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 7px;
   padding: 5px 10px;
 }
 .doc-addfield-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
+  border-style: solid;
 }
 .doc-addfield-menu {
   display: flex;
@@ -4046,6 +4056,154 @@ textarea {
 .update-status .muted { color: var(--muted); }
 .update-status a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .update-status a:hover { text-decoration: underline; }
+
+.update-badge {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  font-weight: 600;
+}
+.update-modal { max-width: 560px; width: 90vw; }
+.update-ver { font-size: 15px; margin: 6px 0 12px; color: var(--text); }
+.update-notes,
+.update-log {
+  max-height: 320px;
+  overflow: auto;
+  background: var(--bg-elev, rgba(127, 127, 127, 0.1));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.update-log { font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: 11.5px; }
+
+/* transcript search */
+.ts-modal {
+  max-width: 760px;
+  width: 92vw;
+  height: 72vh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+}
+.ts-search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ts-search input {
+  flex: 1;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.ts-search input:focus {
+  border-color: var(--accent);
+}
+.ts-scope {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.ts-scope button {
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ts-scope button.on {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.ts-results,
+.ts-reader {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ts-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 30px;
+  font-size: 13px;
+}
+.ts-hit {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: var(--bg-2, rgba(127, 127, 127, 0.05));
+}
+.ts-hit:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.ts-hit-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+}
+.ts-role {
+  font-weight: 600;
+  color: var(--accent);
+}
+.ts-role.user {
+  color: var(--muted);
+}
+.ts-proj {
+  color: var(--muted-2);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+.ts-date {
+  margin-left: auto;
+  color: var(--muted-2);
+}
+.ts-snippet {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.ts-modal mark {
+  background: var(--accent);
+  color: #1a1205;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.ts-back {
+  align-self: flex-start;
+  color: var(--accent);
+  font-size: 12.5px;
+  padding: 4px 0;
+}
+.ts-msg {
+  border-left: 2px solid var(--border);
+  padding: 4px 0 4px 12px;
+}
+.ts-msg .ts-role {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+.ts-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
 
 .update-col { display: flex; flex-direction: column; gap: 8px; }
 .app-version { font-size: 13px; font-weight: 600; color: var(--text); }

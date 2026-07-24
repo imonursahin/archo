@@ -156,6 +156,98 @@ export async function detectClaudeSessions(
   return out.sort((a, b) => b.mtime - a.mtime)
 }
 
+export interface TranscriptHit {
+  file: string
+  sessionId: string
+  project: string // decoded cwd
+  role: 'user' | 'assistant'
+  snippet: string
+  timestamp?: string
+  mtime: number
+}
+
+// Full-text search across every Claude transcript (all projects). Returns the
+// matching messages with a snippet, most-recent first.
+export async function searchTranscripts(
+  query: string,
+  scope?: string[],
+  limit = 80
+): Promise<TranscriptHit[]> {
+  const q = query.trim().toLowerCase()
+  if (q.length < 2) return []
+  const roots = (scope || []).map((c) => c.replace(/\/$/, '')).filter(Boolean)
+  const inScope = (cwd: string): boolean =>
+    roots.length === 0 || roots.some((r) => cwd === r || cwd.startsWith(r + '/'))
+  const projectsDir = path.join(CLAUDE_DIR, 'projects')
+  const projects = await safeReadDir(projectsDir)
+  const hits: TranscriptHit[] = []
+  for (const proj of projects) {
+    const dir = path.join(projectsDir, proj)
+    const files = (await safeReadDir(dir)).filter((f) => f.endsWith('.jsonl'))
+    for (const f of files) {
+      const full = path.join(dir, f)
+      let content: string
+      let mtime = 0
+      try {
+        mtime = (await fs.stat(full)).mtimeMs
+        content = await fs.readFile(full, 'utf8')
+      } catch {
+        continue
+      }
+      const lines = content.split('\n')
+      // scope filter by the transcript's real cwd (from its first entry)
+      if (roots.length) {
+        let fileCwd = ''
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            fileCwd = JSON.parse(line).cwd || ''
+          } catch {
+            continue
+          }
+          break
+        }
+        if (!inScope(fileCwd)) continue
+      }
+      for (const line of lines) {
+        // cheap pre-filter before the JSON parse
+        if (!line || !line.toLowerCase().includes(q)) continue
+        let obj: any
+        try {
+          obj = JSON.parse(line)
+        } catch {
+          continue
+        }
+        if ((obj.type !== 'user' && obj.type !== 'assistant') || obj.isMeta) continue
+        const text = contentToText(obj.message?.content).trim()
+        if (!text || text.startsWith('<local-command') || text.startsWith('<command-')) continue
+        const at = text.toLowerCase().indexOf(q)
+        if (at < 0) continue
+        const start = Math.max(0, at - 60)
+        const snippet =
+          (start > 0 ? '…' : '') +
+          text.slice(start, at + q.length + 140).replace(/\s+/g, ' ') +
+          (text.length > at + q.length + 140 ? '…' : '')
+        hits.push({
+          file: full,
+          sessionId: f.replace(/\.jsonl$/, ''),
+          project: decodeProjectSlug(proj),
+          role: obj.type,
+          snippet,
+          timestamp: obj.timestamp,
+          mtime
+        })
+        if (hits.length >= limit) {
+          hits.sort((a, b) => b.mtime - a.mtime)
+          return hits
+        }
+      }
+    }
+  }
+  hits.sort((a, b) => b.mtime - a.mtime)
+  return hits
+}
+
 export async function readSession(file: string): Promise<SessionMessage[]> {
   const text = await fs.readFile(file, 'utf8')
   const out: SessionMessage[] = []

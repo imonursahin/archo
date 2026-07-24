@@ -12,7 +12,7 @@ import {
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { execFile } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { promisify } from 'util'
 import https from 'https'
 
@@ -64,16 +64,19 @@ function httpsJson(url: string): Promise<any> {
   })
 }
 
-async function latestViaGh(): Promise<{ tag: string; url: string }> {
+function ghEnv(): NodeJS.ProcessEnv {
   const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
-  const env = {
+  return {
     ...process.env,
     PATH: [...new Set([...(process.env.PATH || '').split(':'), ...extra])].join(':')
   }
+}
+
+async function latestViaGh(): Promise<{ tag: string; url: string }> {
   const { stdout } = await pexec(
     'gh',
     ['release', 'view', '--repo', UPDATE_REPO, '--json', 'tagName,url'],
-    { env }
+    { env: ghEnv() }
   )
   const j = JSON.parse(stdout)
   return { tag: String(j.tagName || ''), url: String(j.url || '') }
@@ -83,18 +86,21 @@ async function checkUpdate(): Promise<{
   current: string
   latest?: string
   url?: string
+  notes?: string
   hasUpdate: boolean
   error?: string
 }> {
   const current = app.getVersion()
   let tag = ''
   let url = ''
+  let notes = ''
   let err = ''
   try {
     // public releases API — no token, works once the repo is public
     const j = await httpsJson(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`)
     tag = String(j.tag_name || '')
     url = String(j.html_url || '')
+    notes = String(j.body || '')
   } catch (e: any) {
     err = String(e?.message || e)
     // fallback: local authenticated gh (covers a still-private repo)
@@ -109,7 +115,51 @@ async function checkUpdate(): Promise<{
   }
   const latest = tag.replace(/^v/, '')
   if (!latest) return { current, hasUpdate: false, error: err.slice(0, 200) }
-  return { current, latest, url, hasUpdate: verGt(latest, current) }
+  return { current, latest, url, notes, hasUpdate: verGt(latest, current) }
+}
+
+// Locate Homebrew and whether this app is a brew-cask install (only then can we
+// run the one-click update in-app).
+function brewBin(): string | null {
+  for (const p of ['/opt/homebrew/bin/brew', '/usr/local/bin/brew']) {
+    try {
+      if (fs.existsSync(p)) return p
+    } catch {
+      /* ignore */
+    }
+  }
+  return null
+}
+
+async function canBrewUpdate(): Promise<boolean> {
+  const brew = brewBin()
+  if (!brew) return false
+  try {
+    await pexec(brew, ['list', '--cask', 'archo'], { env: ghEnv() })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Run `brew update && brew upgrade --cask archo`, streaming output to the
+// renderer via 'update:output' and a final {done, ok}.
+function runBrewUpdate(): void {
+  const send = (p: unknown): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update:output', p)
+  }
+  const brew = brewBin()
+  if (!brew) {
+    send({ line: 'Homebrew not found.\n', done: true, ok: false })
+    return
+  }
+  const child = spawn('/bin/zsh', ['-c', `"${brew}" update && "${brew}" upgrade --cask archo`], {
+    env: ghEnv()
+  })
+  child.stdout.on('data', (d: Buffer) => send({ line: d.toString() }))
+  child.stderr.on('data', (d: Buffer) => send({ line: d.toString() }))
+  child.on('error', (e) => send({ line: String(e.message) + '\n', done: true, ok: false }))
+  child.on('exit', (code) => send({ done: true, ok: code === 0 }))
 }
 
 // App name = Archo, but keep the data store where it already lives (userData
@@ -153,7 +203,13 @@ import {
   unlinkSkills,
   setStorePath
 } from './assistants'
-import { listSessions, readSession, detectClaudeSession, detectClaudeSessions } from './claude'
+import {
+  listSessions,
+  readSession,
+  searchTranscripts,
+  detectClaudeSession,
+  detectClaudeSessions
+} from './claude'
 import {
   setPaths as setSessionPaths,
   listSessions as listTermSessions,
@@ -222,7 +278,10 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow?.maximize() // open filling the screen every launch
+    mainWindow?.show()
+  })
 
   // forward renderer console + crashes to main stdout for debugging
   mainWindow.webContents.on('console-message', (_e, level, message) => {
@@ -442,10 +501,25 @@ function registerIpc(): void {
   handle('caffeine:get', () => caffeineId >= 0 && powerSaveBlocker.isStarted(caffeineId))
   handle('app:version', () => app.getVersion())
   handle('app:relaunch', () => {
+    // After a brew update the fresh app lives at /Applications/Archo.app — open
+    // that one (not necessarily the currently-running bundle) so the restart
+    // actually picks up the new version.
+    const installed = '/Applications/Archo.app'
+    try {
+      if (fs.existsSync(installed)) {
+        spawn('open', ['-n', installed], { detached: true, stdio: 'ignore' }).unref()
+        app.exit(0)
+        return
+      }
+    } catch {
+      /* ignore */
+    }
     app.relaunch()
     app.exit(0)
   })
   handle('update:check', () => checkUpdate())
+  handle('update:canBrew', () => canBrewUpdate())
+  ipcMain.on('update:run', () => runBrewUpdate())
   handle('git:branch', (dir: string) => gitBranch(dir))
   handle('session:usage', (cwd: string, sessionId: string) => sessionUsage(cwd, sessionId))
   handle('bridge:status', (dir: string) => bridgeStatus(dir))
@@ -498,6 +572,9 @@ function registerIpc(): void {
   // claude transcripts (resume history)
   handle('sessions:list', () => listSessions())
   handle('session:read', (file: string) => readSession(file))
+  handle('transcripts:search', (query: string, scope?: string[]) =>
+    searchTranscripts(query, scope)
+  )
   // PTY
   ipcMain.on('pty:create', (_e, id: string, opts) => {
     if (mainWindow) createTerm(mainWindow, id, opts || {})

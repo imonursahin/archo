@@ -98,6 +98,17 @@ const DICT: Record<string, { en: string; tr: string }> = {
   version: { en: 'Version', tr: 'Sürüm' },
   developer: { en: 'Developer', tr: 'Geliştirici' },
   color: { en: 'Color', tr: 'Renk' },
+  searchTranscripts: { en: 'Search transcripts', tr: 'Transcript\'lerde ara' },
+  searchTranscriptsPh: {
+    en: 'Search all Claude conversations…',
+    tr: 'Tüm Claude konuşmalarında ara…'
+  },
+  backToResults: { en: 'Back to results', tr: 'Sonuçlara dön' },
+  you: { en: 'You', tr: 'Sen' },
+  searching: { en: 'Searching…', tr: 'Aranıyor…' },
+  noResults: { en: 'No matches', tr: 'Eşleşme yok' },
+  thisAssistant: { en: 'This assistant', tr: 'Bu assistant' },
+  allProjects: { en: 'All', tr: 'Tümü' },
   assistantNamePh: { en: 'my-assistant', tr: 'asistanım' },
   minUnit: { en: 'm', tr: 'dk' },
   keepAwake: { en: 'Keep awake', tr: 'Uyanık tut' },
@@ -115,6 +126,11 @@ const DICT: Record<string, { en: string; tr: string }> = {
   copy: { en: 'Copy', tr: 'Kopyala' },
   copied: { en: 'Copied ✓', tr: 'Kopyalandı ✓' },
   restartApp: { en: 'Restart', tr: 'Yeniden başlat' },
+  updateNow: { en: 'Update now', tr: 'Şimdi güncelle' },
+  updating: { en: 'Updating…', tr: 'Güncelleniyor…' },
+  updateFailed: { en: 'Update failed', tr: 'Güncelleme başarısız' },
+  brewNotFound: { en: 'Not a Homebrew install — download the update instead', tr: 'Homebrew kurulumu değil — güncellemeyi indir' },
+  updateReadyBadge: { en: 'Update to v{v}', tr: 'v{v}\'e güncelle' },
   restartHint: {
     en: 'After upgrading, restart to apply',
     tr: 'Yükselttikten sonra uygulamak için yeniden başlat'
@@ -193,7 +209,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   bucketOlder: { en: 'Older', tr: 'Daha eski' },
   bucketPinned: { en: '📌 Pinned', tr: '📌 Sabitler' },
   confirmDeleteSession: { en: 'Delete session? (terminal logs are deleted too)', tr: 'Session silinsin mi? (terminal kayıtları da silinir)' },
-  searchSessionPh: { en: '🔍  search session…', tr: '🔍  session ara…' },
+  searchSessionPh: { en: 'search session…', tr: 'session ara…' },
   newSessionPlus: { en: '＋ New session', tr: '＋ Yeni session' },
   noSessionsYet: { en: 'No sessions yet', tr: 'Henüz session yok' },
   noMatchingSession: { en: 'no matching session', tr: 'eşleşen session yok' },

@@ -1,6 +1,7 @@
 import type { Assistant, EngineDef } from '../global'
-import { t } from '../lib/i18n'
+import { t, ti } from '../lib/i18n'
 import Icon from './Icon'
+import { type UpdateInfo } from './UpdateModal'
 
 interface Props {
   assistants: Assistant[]
@@ -13,6 +14,9 @@ interface Props {
   onDelete: (a: Assistant) => void
   onImport: () => void
   onExport: (a: Assistant) => void
+  update?: UpdateInfo | null
+  onShowUpdate?: () => void
+  onSearchTranscripts?: () => void
 }
 
 export default function Home({
@@ -25,7 +29,10 @@ export default function Home({
   onSettings,
   onDelete,
   onImport,
-  onExport
+  onExport,
+  update,
+  onShowUpdate,
+  onSearchTranscripts
 }: Props): JSX.Element {
   const engineName = (id: string): string => engines.find((e) => e.id === id)?.name || id
 
@@ -38,6 +45,11 @@ export default function Home({
           <p className="home-sub">{t('homeSub')}</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          {update && (
+            <button className="btn big update-badge" onClick={onShowUpdate}>
+              ↑ {ti('updateReadyBadge', { v: update.latest || '' })}
+            </button>
+          )}
           <button className="btn big icon-btn" onClick={onUsage}>
             <Icon name="usage" /> {t('usage')}
           </button>

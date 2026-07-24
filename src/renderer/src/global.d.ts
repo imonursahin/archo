@@ -142,6 +142,16 @@ export interface SessionMessage {
   timestamp?: string
 }
 
+export interface TranscriptHit {
+  file: string
+  sessionId: string
+  project: string
+  role: 'user' | 'assistant'
+  snippet: string
+  timestamp?: string
+  mtime: number
+}
+
 export interface StudioApi {
   listEngines(): Promise<EngineDef[]>
   listAssistants(): Promise<Assistant[]>
@@ -280,6 +290,7 @@ export interface StudioApi {
   setTerminalBg(sessionId: string, terminalId: string, bg: string): Promise<void>
   listSessions(): Promise<SessionMeta[]>
   readSession(file: string): Promise<SessionMessage[]>
+  searchTranscripts(query: string, scope?: string[]): Promise<TranscriptHit[]>
   ptyCreate(id: string, opts: object): void
   ptyWrite(id: string, data: string): void
   ptyResize(id: string, cols: number, rows: number): void
@@ -298,6 +309,7 @@ export interface StudioApi {
     current: string
     latest?: string
     url?: string
+    notes?: string
     hasUpdate: boolean
     error?: string
   }>
@@ -305,6 +317,9 @@ export interface StudioApi {
   getCaffeine(): Promise<boolean>
   getVersion(): Promise<string>
   relaunch(): Promise<void>
+  canBrewUpdate(): Promise<boolean>
+  runUpdate(): void
+  onUpdateOutput(cb: (p: { line?: string; done?: boolean; ok?: boolean }) => void): () => void
 }
 
 declare global {
