@@ -406,6 +406,7 @@ export default function SessionsView({
   const [logPaths, setLogPaths] = useState<Record<string, string>>({})
   const [editingName, setEditingName] = useState(false)
   const [editingTab, setEditingTab] = useState<string | null>(null)
+  const [tabRect, setTabRect] = useState<DOMRect | null>(null)
   const [sessQuery, setSessQuery] = useState('')
   const [splitId, setSplitId] = useState<string | null>(null) // second pane for split view
   const [tagInput, setTagInput] = useState('')
@@ -795,7 +796,10 @@ export default function SessionsView({
                   key={t.id}
                   className={`term-tab ${active === t.id ? 'active' : ''}`}
                   onClick={() => setActive(t.id)}
-                  onDoubleClick={() => setEditingTab(t.id)}
+                  onDoubleClick={(e) => {
+                    setEditingTab(t.id)
+                    setTabRect(e.currentTarget.getBoundingClientRect())
+                  }}
                 >
                   <span className="rec" />
                   {editingTab === t.id ? (
@@ -820,8 +824,12 @@ export default function SessionsView({
                   ) : (
                     <span>{t.name}</span>
                   )}
-                  {editingTab === t.id && (
-                    <div className="tab-colors" onMouseDown={(e) => e.preventDefault()}>
+                  {editingTab === t.id && tabRect && (
+                    <div
+                      className="tab-colors"
+                      onMouseDown={(e) => e.preventDefault()}
+                      style={{ position: 'fixed', top: tabRect.bottom + 3, left: tabRect.left }}
+                    >
                       {TAB_BGS.map((c) => (
                         <button
                           key={c || 'default'}
