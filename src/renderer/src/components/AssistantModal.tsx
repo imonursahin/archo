@@ -51,7 +51,7 @@ export default function AssistantModal({ onClose, onCreated }: Props): JSX.Eleme
         <input
           className="modal-input"
           autoFocus
-          placeholder="onur-ai"
+          placeholder={t('assistantNamePh')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {

@@ -16,7 +16,7 @@ VER="${1:?usage: release.sh <version>  e.g. release.sh 0.1.1}"
 echo "▸ bumping version → $VER"
 npm version "$VER" --no-git-tag-version >/dev/null
 
-git add package.json
+git add package.json CHANGELOG.md 2>/dev/null || git add package.json
 git -c commit.gpgsign=false commit -q -m "Release v$VER"
 git push origin master
 

@@ -98,6 +98,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   version: { en: 'Version', tr: 'Sürüm' },
   developer: { en: 'Developer', tr: 'Geliştirici' },
   color: { en: 'Color', tr: 'Renk' },
+  assistantNamePh: { en: 'my-assistant', tr: 'asistanım' },
+  minUnit: { en: 'm', tr: 'dk' },
   keepAwake: { en: 'Keep awake', tr: 'Uyanık tut' },
   keepAwakeHint: {
     en: 'Keeps your computer awake — screen stays on, no sleep',

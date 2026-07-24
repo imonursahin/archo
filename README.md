@@ -32,9 +32,11 @@ Built with Electron, React, and TypeScript.
 
 ### Terminal sessions
 - Named, resumable terminals per assistant with full recorded scrollback
+- Rename and color-code sessions and terminals to tell them apart at a glance
 - Resume previous Claude Code conversations
 - Sessions bucketed by recency (Today, Yesterday, This week…) plus pinning, tags, and search
 - Split-view to watch and work in two terminals side by side
+- Select and copy terminal text (⌘C / ⌘V)
 - Smart links in terminal output — clickable URLs and `file:line` references
 
 ### Per-session Claude controls
@@ -55,6 +57,7 @@ Built with Electron, React, and TypeScript.
 
 ### Everywhere
 - Command palette (⌘K) and find & replace (⌘⇧F)
+- Keep-awake toggle to stop your Mac from sleeping during long runs
 - Desktop notifications when a run finishes, waits, or stops — click to jump straight to that session; in-app toasts for app events
 - Dark / light theme and English / Turkish UI
 - Automatic update check against GitHub Releases
@@ -74,6 +77,10 @@ Built with Electron, React, and TypeScript.
 **Sessions** — named, resumable terminals per assistant, with model/effort selectors, `@file` context, and a running Claude session.
 
 ![Sessions](docs/screenshots/sessions.png)
+
+**Color-code and keep awake** — rename and tint sessions and terminals to tell them apart, and toggle keep-awake so your Mac won't sleep during long runs.
+
+![Color-coding and keep-awake](docs/screenshots/colors-keep-awake.png)
 
 **Prompt library** — save reusable prompts and send them to the active terminal with one click.
 

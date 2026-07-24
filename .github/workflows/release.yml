@@ -54,13 +54,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ steps.ver.outputs.v }}" \
-            dist/Archo-*-arm64.dmg \
-            dist/Archo-*-arm64-mac.zip \
-            dist/latest-mac.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Archo ${{ steps.ver.outputs.v }}" \
-            --generate-notes
+          VER="${{ steps.ver.outputs.v }}"
+          # Use the hand-written CHANGELOG.md section for this version as the
+          # release notes; fall back to auto-generated notes if it's missing.
+          awk -v v="$VER" 'index($0, "## " v)==1 {f=1; next} /^## /{f=0} f' CHANGELOG.md > /tmp/notes.md || true
+          if [ -s /tmp/notes.md ]; then
+            gh release create "v$VER" \
+              dist/Archo-*-arm64.dmg dist/Archo-*-arm64-mac.zip dist/latest-mac.yml \
+              --repo "$GITHUB_REPOSITORY" --title "Archo $VER" --notes-file /tmp/notes.md
+          else
+            gh release create "v$VER" \
+              dist/Archo-*-arm64.dmg dist/Archo-*-arm64-mac.zip dist/latest-mac.yml \
+              --repo "$GITHUB_REPOSITORY" --title "Archo $VER" --generate-notes
+          fi
 
       - name: Update Homebrew cask
         if: steps.check.outputs.exists == 'false'
