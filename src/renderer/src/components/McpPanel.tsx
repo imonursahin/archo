@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ResourceItem } from '../global'
 import { t as tr, ti } from '../lib/i18n'
 
@@ -121,6 +121,12 @@ export default function McpPanel({ item, onClose, onChanged, onStatus }: Props):
     }
   }
 
+  // auto-connect when the panel opens so status/tools reflect the live server
+  useEffect(() => {
+    test()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.name])
+
   function startEdit(): void {
     setDraft(JSON.stringify(cfg, null, 2))
     setSaveErr(null)
@@ -150,7 +156,11 @@ export default function McpPanel({ item, onClose, onChanged, onStatus }: Props):
   }
 
   async function remove(): Promise<void> {
-    if (!confirm(ti('confirmDeleteMcp', { name: item.name }))) return
+    const isGlobal = (item.meta as any)?.mcpScope === 'global'
+    const msg = isGlobal
+      ? ti('confirmDeleteMcpGlobal', { name: item.name })
+      : ti('confirmDeleteMcp', { name: item.name })
+    if (!confirm(msg)) return
     await window.api.deleteMcpServer(item.path!, item.name)
     onChanged?.()
     onClose()
@@ -174,6 +184,9 @@ export default function McpPanel({ item, onClose, onChanged, onStatus }: Props):
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {!editing && (
             <>
+              <button className="btn" onClick={test} disabled={status === 'testing'}>
+                {status === 'testing' ? tr('checkingUpdate') : `🔄 ${tr('mcpReconnect')}`}
+              </button>
               <button className="btn" onClick={startEdit}>
                 {tr('mcpEdit')}
               </button>

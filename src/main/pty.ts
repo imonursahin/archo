@@ -22,6 +22,8 @@ interface Term {
   lastData: number // last output timestamp
   burstStart: number // when the current output burst started
   burstBytes: number // bytes produced in the current burst
+  inputBytes: number // user keystrokes typed during the current burst
+  lastInput: number // last time the user typed into this terminal
   running: boolean // an output burst is in progress
   busySent: boolean // spinner (busy:true) already emitted for this burst
   notified: boolean // done-notification already fired for this burst
@@ -30,7 +32,7 @@ interface Term {
 // A burst must produce at least this many bytes to count as "real work"
 // (Claude streaming / a running command) rather than keystroke echo or a
 // prompt redraw. This keeps the spinner/notification off while you just type.
-const BUSY_BYTES = 1500
+const BUSY_BYTES = 500
 
 const MAX_BUFFER = 500_000 // cap in-memory scrollback per terminal
 
@@ -69,11 +71,16 @@ function ensureIdleWatch(): void {
     const now = Date.now()
     for (const t of terms.values()) {
       if (!t.running) continue
-      if (now - t.lastData > 2500) {
+      if (now - t.lastData > 1500) {
         // burst ended
         t.running = false
-        const wasWork = t.busySent // only real (heavy-output) bursts matter
+        // real work = heavy output that kept coming AFTER the user stopped typing
+        // (Claude/command keeps producing; typing ends the moment you stop). If the
+        // last output landed right after your last keystroke, it was just echo.
+        const outlivedInput = t.lastData - t.lastInput > 700
+        const wasWork = t.busySent && outlivedInput
         if (t.busySent) send('pty:busy', { id: t.id, busy: false })
+        t.inputBytes = 0 // reset echo accounting for the next burst
         if (wasWork && !t.notified) {
           t.notified = true
           send('pty:done', {
@@ -84,7 +91,7 @@ function ensureIdleWatch(): void {
         }
       }
     }
-  }, 1000)
+  }, 500)
 }
 
 const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : 'zsh')
@@ -168,6 +175,8 @@ export function createTerm(
     lastData: 0,
     burstStart: 0,
     burstBytes: 0,
+    inputBytes: 0,
+    lastInput: 0,
     running: false,
     busySent: false,
     notified: false
@@ -192,7 +201,9 @@ export function createTerm(
     }
     term.burstBytes += data.length
     term.lastData = now
-    if (!term.busySent && term.burstBytes > BUSY_BYTES) {
+    // "work" only when the output clearly exceeds the echo of what the user is
+    // typing (output >> keystrokes). Typing/paste echoes ~1:1 and never trips this.
+    if (!term.busySent && term.burstBytes > BUSY_BYTES && term.burstBytes > term.inputBytes * 3) {
       term.busySent = true
       send('pty:busy', { id, busy: true })
     }
@@ -215,7 +226,12 @@ export function createTerm(
 }
 
 export function writeTerm(id: string, data: string): void {
-  terms.get(id)?.proc.write(data)
+  const t = terms.get(id)
+  if (t) {
+    t.inputBytes += data.length
+    t.lastInput = Date.now()
+  }
+  t?.proc.write(data)
 }
 
 export function resizeTerm(id: string, cols: number, rows: number): void {

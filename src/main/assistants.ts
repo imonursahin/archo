@@ -422,7 +422,7 @@ async function collectMcp(baseDir: string, e: EngineDef): Promise<ResourceItem[]
     items.push({
       kind: 'mcp',
       name,
-      path: src, // toggle writes to the assistant's settings, keyed by name
+      path: GLOBAL_MCP_FILE, // defined in ~/.claude.json → delete/edit target the real file
       description: mcpDescription(cfg),
       meta: { ...cfg, mcpScope: 'global', mcpEnabled: !disabled.has(name) }
     })
@@ -746,11 +746,19 @@ export async function updateMcpServer(file: string, name: string, cfg: unknown):
 
 // remove every trace of an MCP server: the .mcp.json entry AND all references
 // in settings.json / settings.local.json (enabled lists + mcp__<name>__ perms).
+// Atomic JSON write (temp + rename) so a crash mid-write can't corrupt a file —
+// important for ~/.claude.json, which holds all of Claude Code's state.
+async function writeJsonAtomic(file: string, obj: unknown): Promise<void> {
+  const tmp = `${file}.tmp-${process.pid}`
+  await fs.writeFile(tmp, JSON.stringify(obj, null, 2), 'utf8')
+  await fs.rename(tmp, file)
+}
+
 export async function deleteMcpServer(file: string, name: string): Promise<void> {
   const json = (await readJson(file)) || {}
   if (json.mcpServers && name in json.mcpServers) {
     delete json.mcpServers[name]
-    await fs.writeFile(file, JSON.stringify(json, null, 2), 'utf8')
+    await writeJsonAtomic(file, json)
   }
   const baseDir = path.dirname(file)
   const settingsFiles = [
@@ -790,7 +798,7 @@ export async function deleteMcpServer(file: string, name: string): Promise<void>
         }
       }
     }
-    if (changed) await fs.writeFile(sf, JSON.stringify(s, null, 2), 'utf8')
+    if (changed) await writeJsonAtomic(sf, s)
   }
 }
 export async function writeResourceFile(file: string, content: string): Promise<void> {

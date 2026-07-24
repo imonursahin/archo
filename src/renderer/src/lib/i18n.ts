@@ -305,6 +305,11 @@ const DICT: Record<string, { en: string; tr: string }> = {
   errInvalidJson: { en: 'invalid JSON: ', tr: 'geçersiz JSON: ' },
   errNotSaved: { en: 'could not save', tr: 'kaydedilemedi' },
   confirmDeleteMcp: { en: 'Delete MCP server "{name}" from .mcp.json?', tr: '"{name}" MCP server\'ı .mcp.json\'dan silinsin mi?' },
+  mcpReconnect: { en: 'Reconnect', tr: 'Yeniden bağlan' },
+  confirmDeleteMcpGlobal: {
+    en: 'Delete global MCP server "{name}"? This removes it from ~/.claude.json for ALL projects.',
+    tr: '"{name}" global MCP server\'ı silinsin mi? ~/.claude.json\'dan TÜM projeler için kaldırılır.'
+  },
 
   // CreateModal
   newResource: { en: 'New Resource', tr: 'Yeni Kaynak' },
