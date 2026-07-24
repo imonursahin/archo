@@ -2762,6 +2762,7 @@ textarea {
   gap: 2px;
 }
 .term-tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -2770,6 +2771,31 @@ textarea {
   color: #8b8b93; /* terminal bar is always dark */
   border-radius: 6px 6px 0 0;
   max-width: 200px;
+}
+.tab-colors {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  margin-top: 3px;
+  background: #17171b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.tab-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+.tab-color.sel {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .term-tab.active {
   background: #0a0a0c;

@@ -13,6 +13,7 @@ export interface TerminalRec {
   command?: string
   claudeSessionId?: string // captured claude session for seamless --resume
   ranClaude?: boolean // claude was run here (even typed manually) → resume on restart
+  bg?: string // custom terminal background color
 }
 
 export interface TermSession {
@@ -217,6 +218,20 @@ export async function setTerminalClaude(
 // Mark that claude was run in this terminal even before its session id is known
 // (e.g. the user typed `claude` manually). Ensures it resumes on restart instead
 // of being restarted as a plain shell.
+export async function setTerminalBg(
+  sessionId: string,
+  terminalId: string,
+  bg: string
+): Promise<void> {
+  const list = await load()
+  const s = list.find((x) => x.id === sessionId)
+  if (!s) return
+  s.terminals = s.terminals.map((t) =>
+    t.id === terminalId ? { ...t, bg: bg || undefined } : t
+  )
+  await persist(list)
+}
+
 export async function markTerminalRanClaude(
   sessionId: string,
   terminalId: string

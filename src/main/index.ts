@@ -170,6 +170,7 @@ import {
   removeTerminal,
   setTerminalClaude,
   markTerminalRanClaude,
+  setTerminalBg,
   readTerminalLog,
   logPathFor
 } from './sessions'
@@ -487,6 +488,9 @@ function registerIpc(): void {
   )
   handle('terminal:ranclaude', (sessionId: string, terminalId: string) =>
     markTerminalRanClaude(sessionId, terminalId)
+  )
+  handle('terminal:setbg', (sessionId: string, terminalId: string, bg: string) =>
+    setTerminalBg(sessionId, terminalId, bg)
   )
   handle('terminal:setclaude', (sessionId: string, terminalId: string, claudeId: string) =>
     setTerminalClaude(sessionId, terminalId, claudeId)

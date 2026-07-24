@@ -29,6 +29,9 @@ const theme = {
 
 // terminals whose PTY was started during this app run
 const started = new Set<string>()
+
+// preset terminal background colors (first = default/none)
+const TAB_BGS = ['', '#17171b', '#0d1524', '#0e1a12', '#170e1f', '#1c1012', '#08191a', '#1a140a']
 // claude session ids already assigned to a terminal (so two terminals in the
 // same folder never resume the SAME conversation)
 const claimedClaude = new Set<string>()
@@ -81,7 +84,7 @@ function TermInstance({
     const xterm = new Terminal({
       fontFamily: "'SF Mono', ui-monospace, Menlo, monospace",
       fontSize: 12.5,
-      theme,
+      theme: { ...theme, background: term.bg || theme.background },
       cursorBlink: true,
       allowProposedApi: true,
       scrollback: 5000
@@ -92,6 +95,23 @@ function TermInstance({
     fit.fit()
     xtermRef.current = xterm
     fitRef.current = fit
+
+    // Answer OSC 10/11 (fg/bg color) queries. TUIs like Claude query the
+    // terminal's background to adapt styling (e.g. shading the input area);
+    // xterm.js doesn't reply on its own, so we report our colors here.
+    const oscColor = (hex: string): string => {
+      const h = hex.replace('#', '')
+      const [r, g, b] = [h.slice(0, 2), h.slice(2, 4), h.slice(4, 6)]
+      return `rgb:${r}${r}/${g}${g}/${b}${b}`
+    }
+    xterm.parser.registerOscHandler(11, (d) => {
+      if (d === '?') window.api.ptyWrite(term.id, `\x1b]11;${oscColor(term.bg || theme.background)}\x07`)
+      return true
+    })
+    xterm.parser.registerOscHandler(10, (d) => {
+      if (d === '?') window.api.ptyWrite(term.id, `\x1b]10;${oscColor(theme.foreground)}\x07`)
+      return true
+    })
 
     // Cmd+C copies the selection (Ctrl+C stays SIGINT); Cmd+V pastes.
     xterm.attachCustomKeyEventHandler((e) => {
@@ -314,6 +334,12 @@ function TermInstance({
     xtermRef.current?.focus()
   }
 
+  // apply a custom background color live (without remounting the terminal)
+  useEffect(() => {
+    const x = xtermRef.current
+    if (x) x.options.theme = { ...theme, background: term.bg || theme.background }
+  }, [term.bg])
+
   // a plain (non-claude) dead terminal → auto-start a fresh shell the first time
   // it's viewed, so you can just type (history stays visible above). A later
   // manual `exit` won't re-spawn (shows the restart bar instead).
@@ -327,7 +353,11 @@ function TermInstance({
 
   return (
     <div className={`xterm-wrap ${visible ? '' : 'hidden'}`}>
-      <div className="xterm-host" ref={hostRef} />
+      <div
+        className="xterm-host"
+        ref={hostRef}
+        style={term.bg ? { background: term.bg } : undefined}
+      />
       {/* claude: centered resume card (no meaningful scrollback to show) */}
       {dead && isClaudeTerm && (
         <div className="term-dead">
@@ -789,6 +819,28 @@ export default function SessionsView({
                     />
                   ) : (
                     <span>{t.name}</span>
+                  )}
+                  {editingTab === t.id && (
+                    <div className="tab-colors" onMouseDown={(e) => e.preventDefault()}>
+                      {TAB_BGS.map((c) => (
+                        <button
+                          key={c || 'default'}
+                          className={`tab-color ${(t.bg || '') === c ? 'sel' : ''}`}
+                          style={{ background: c || 'var(--bg, #0a0a0c)' }}
+                          title={c || 'default'}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.api.setTerminalBg(open.id, t.id, c)
+                            setOpen({
+                              ...open,
+                              terminals: open.terminals.map((x) =>
+                                x.id === t.id ? { ...x, bg: c || undefined } : x
+                              )
+                            })
+                          }}
+                        />
+                      ))}
+                    </div>
                   )}
                   <span
                     className="close"

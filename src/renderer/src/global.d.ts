@@ -53,6 +53,7 @@ export interface TerminalRec {
   command?: string
   claudeSessionId?: string
   ranClaude?: boolean // claude was run in this terminal (even if typed manually)
+  bg?: string // custom terminal background color
 }
 
 export interface TermSession {
@@ -274,6 +275,7 @@ export interface StudioApi {
   detectClaudeSessions(cwd: string, sinceMs: number): Promise<{ id: string; mtime: number }[]>
   setTerminalClaude(sessionId: string, terminalId: string, claudeId: string): Promise<void>
   markTerminalRanClaude(sessionId: string, terminalId: string): Promise<void>
+  setTerminalBg(sessionId: string, terminalId: string, bg: string): Promise<void>
   listSessions(): Promise<SessionMeta[]>
   readSession(file: string): Promise<SessionMessage[]>
   ptyCreate(id: string, opts: object): void
