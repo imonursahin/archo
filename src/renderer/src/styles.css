@@ -1857,13 +1857,11 @@ textarea {
 .xterm-host {
   position: absolute;
   inset: 0;
-  padding: 4px 10px; /* breathing room so text isn't flush to the edges */
+  /* left padding only: keeps text off the left edge while the scrollbar stays
+     flush at the right. FitAddon reserves the scrollbar width, so the right side
+     keeps a natural gap and nothing gets clipped. */
+  padding: 4px 0 4px 12px;
   background: #0a0a0c;
-}
-/* keep the scrollbar at the very right edge — the host's right padding pads the
-   text, but we pull the scroll viewport back out so the bar isn't inset */
-.xterm-host .xterm-viewport {
-  right: -10px !important;
 }
 .term-dead {
   position: absolute;
