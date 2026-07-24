@@ -398,7 +398,6 @@ export default function SessionsView({
   const [editingTab, setEditingTab] = useState<string | null>(null)
   const [tabRect, setTabRect] = useState<DOMRect | null>(null)
   const [sessQuery, setSessQuery] = useState('')
-  const [sessColor, setSessColor] = useState<{ id: string; rect: DOMRect } | null>(null)
   const [splitId, setSplitId] = useState<string | null>(null) // second pane for split view
   const [tagInput, setTagInput] = useState('')
 
@@ -671,17 +670,6 @@ export default function SessionsView({
                     <span className="slv-icon">▤</span>
                     <span className="ss-item-name">{s.name}</span>
                     <button
-                      className="ss-color"
-                      title={t('color')}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        setSessColor((c) => (c?.id === s.id ? null : { id: s.id, rect }))
-                      }}
-                    >
-                      ◐
-                    </button>
-                    <button
                       className={`ss-pin ${s.pinned ? 'on' : ''}`}
                       title={s.pinned ? t('unpin') : t('pin')}
                       onClick={(e) => {
@@ -701,32 +689,6 @@ export default function SessionsView({
                       ×
                     </button>
                   </div>
-                  {sessColor?.id === s.id && (
-                    <div
-                      className="tab-colors"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        position: 'fixed',
-                        top: sessColor.rect.bottom + 4,
-                        left: sessColor.rect.left
-                      }}
-                    >
-                      {TAB_BGS.map((c) => (
-                        <button
-                          key={c || 'default'}
-                          className={`tab-color ${(s.bg || '') === c ? 'sel' : ''}`}
-                          style={{ background: c || 'var(--bg, #0a0a0c)' }}
-                          title={c || 'default'}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSessBg(s.id, c)
-                            setSessColor(null)
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
                   <div className="ss-item-meta">
                     {ti('nTerminal', { n: s.terminals.length })} · {relTime(s.createdAt)}
                   </div>
@@ -757,22 +719,38 @@ export default function SessionsView({
           <div className="session-inside">
             <div className="si-head">
               {editingName ? (
-                <input
-                  key={open.id}
-                  className="si-name-input"
-                  autoFocus
-                  defaultValue={open.name}
-                  onBlur={async (e) => {
-                    const v = e.target.value.trim() || open.name
-                    setOpen({ ...open, name: v })
-                    setEditingName(false)
-                    await window.api.renameTermSession(open.id, v)
-                    reload()
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                  }}
-                />
+                <>
+                  <input
+                    key={open.id}
+                    className="si-name-input"
+                    autoFocus
+                    defaultValue={open.name}
+                    onBlur={async (e) => {
+                      const v = e.target.value.trim() || open.name
+                      setOpen({ ...open, name: v })
+                      setEditingName(false)
+                      await window.api.renameTermSession(open.id, v)
+                      reload()
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    }}
+                  />
+                  <div className="tab-colors inline" onMouseDown={(e) => e.preventDefault()}>
+                    {TAB_BGS.map((c) => (
+                      <button
+                        key={c || 'default'}
+                        className={`tab-color ${(open.bg || '') === c ? 'sel' : ''}`}
+                        style={{ background: c || 'var(--bg, #0a0a0c)' }}
+                        title={c || 'default'}
+                        onClick={() => {
+                          setSessBg(open.id, c)
+                          setOpen({ ...open, bg: c || undefined })
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
               ) : (
                 <span
                   className="si-name"

@@ -2778,6 +2778,13 @@ textarea {
   border-radius: 6px 6px 0 0;
   max-width: 200px;
 }
+.tab-colors.inline {
+  position: static;
+  box-shadow: none;
+  background: transparent;
+  border: none;
+  padding: 4px 0 0;
+}
 .tab-colors {
   z-index: 200;
   display: flex;
