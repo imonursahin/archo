@@ -95,17 +95,18 @@ export default function App(): JSX.Element {
   // main-side task-done notification (works for ALL terminals, even ones whose
   // view is unmounted / in another session)
   useEffect(() => {
-    const offDone = window.api.onPtyDone(async ({ id, lastLine, durationSec }) => {
+    const offDone = window.api.onPtyDone(async ({ id, durationSec }) => {
       if (!getPrefs().notifyOnDone) return
       // don't notify for the terminal you're actively watching
       if (document.hasFocus() && activeTermRef.current === id) return
       const info = await window.api.findTerminal(id)
       if (!info) return
+      // clean, consistent content: where it happened (title) + a short status
+      // (body). The raw last output line is skipped — for TUIs it's just noise.
       window.api.notify(
         `${info.sessionName} · ${info.terminalName}`,
-        lastLine || ti('taskDoneBody', { name: info.terminalName, sec: Math.round(durationSec) }),
+        ti('taskDoneBody', { sec: Math.round(durationSec) }),
         {
-          subtitle: ti('taskDoneSubtitle', { sec: Math.round(durationSec) }),
           assistantId: info.assistantId,
           sessionId: info.sessionId,
           terminalId: id

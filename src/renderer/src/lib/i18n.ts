@@ -207,7 +207,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   emptySessionSub: { en: 'Open a terminal with "＋" — its output is saved automatically.', tr: '“＋” ile bir terminal aç — çıktısı otomatik kaydedilir.' },
   terminalEnded: { en: '[terminal ended]', tr: '[terminal sonlandı]' },
   taskDoneTitle: { en: 'Task complete', tr: 'Görev tamamlandı' },
-  taskDoneBody: { en: '{name}: task finished after {sec}s', tr: '{name}: {sec} sn süren iş bitti' },
+  taskDoneBody: { en: 'Finished · {sec}s · tap to open', tr: 'Bitti · {sec} sn · açmak için tıkla' },
   taskDoneSubtitle: { en: 'Finished in {sec}s — click to open', tr: '{sec} sn sürdü — açmak için tıkla' },
   running: { en: 'Running…', tr: 'Çalışıyor…' },
 
