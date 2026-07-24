@@ -1857,6 +1857,8 @@ textarea {
 .xterm-host {
   position: absolute;
   inset: 0;
+  padding: 4px 10px; /* breathing room so text isn't flush to the edges */
+  background: #0a0a0c;
 }
 .term-dead {
   position: absolute;

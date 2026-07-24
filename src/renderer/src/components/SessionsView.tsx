@@ -15,6 +15,8 @@ const theme = {
   background: '#0a0a0c',
   foreground: '#e4e4e7',
   cursor: '#d97757',
+  selectionBackground: '#3b3b45',
+  selectionForeground: '#ffffff',
   black: '#0a0a0c',
   brightBlack: '#52525b',
   green: '#4ade80',
@@ -90,6 +92,20 @@ function TermInstance({
     fit.fit()
     xtermRef.current = xterm
     fitRef.current = fit
+
+    // Cmd+C copies the selection (Ctrl+C stays SIGINT); Cmd+V pastes.
+    xterm.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown' || !e.metaKey) return true
+      if (e.key === 'c' && xterm.hasSelection()) {
+        navigator.clipboard.writeText(xterm.getSelection())
+        return false
+      }
+      if (e.key === 'v') {
+        navigator.clipboard.readText().then((txt) => txt && window.api.ptyWrite(term.id, txt))
+        return false
+      }
+      return true
+    })
 
     // ---- smart links: clickable URLs (open browser) + file:line (insert @path) ----
     const linkProvider = xterm.registerLinkProvider({
