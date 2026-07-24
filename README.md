@@ -70,7 +70,7 @@ Built with Electron, React, and TypeScript.
 - Command palette (⌘K) and find & replace (⌘⇧F)
 - Full-text search across every Claude conversation (⌘⇧P) — find any answer, jump to that moment, and scope to one assistant or all projects
 - Keep-awake toggle to stop your Mac from sleeping during long runs
-- Desktop notifications when a run finishes, waits, or stops — click to jump straight to that session; in-app toasts for app events
+- Desktop notifications when a run finishes, waits, or stops — click one to jump straight to that exact session and terminal; in-app toasts for app events
 - Dark / light theme and English / Turkish UI
 - Automatic update check against GitHub Releases
 
