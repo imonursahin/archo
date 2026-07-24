@@ -127,6 +127,7 @@ Click a result to open the full conversation, with every match highlighted.
 ### Homebrew (recommended)
 
 ```bash
+brew update
 brew install --cask imonursahin/tap/archo
 ```
 
