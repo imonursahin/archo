@@ -16,6 +16,17 @@ Built with Electron, React, and TypeScript.
 
 ---
 
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Install](#install)
+- [Development](#development)
+- [Releasing](#releasing)
+- [License](#license)
+
+---
+
 ## Features
 
 ### Assistants
