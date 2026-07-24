@@ -20,7 +20,7 @@ Built with Electron, React, and TypeScript.
 
 ### Assistants
 - Create assistants, each stored as a real Claude Code project you can run
-- Run, delete, and duplicate assistants
+- Delete assistants you no longer need
 - Import / export assistants (including your global settings, theme, and language) to move between machines
 
 ### Resource editor
@@ -42,9 +42,7 @@ Built with Electron, React, and TypeScript.
 - Pull files into context with the `@file` picker across multiple roots
 - Pick the model (auto / Opus / Sonnet / Haiku) and reasoning effort, then launch a Claude session in one click
 - Live context budget with cost and duration for the active session
-- Git branch and "has changes" indicators
 - Prompt library to save and re-send prompts to the active terminal
-- Skill bridge — link an external repo so an assistant's skills apply there
 
 ### MCP
 - Configure MCP servers at global and per-project scope
