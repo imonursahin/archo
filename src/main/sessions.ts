@@ -172,6 +172,21 @@ export async function deleteSession(id: string): Promise<void> {
   await fs.rm(path.join(logsDir, id), { recursive: true, force: true }).catch(() => {})
 }
 
+// Remove ALL of an assistant's sessions + their recorded logs, leaving nothing
+// behind. Returns the terminal ids so the caller can kill their live PTYs.
+export async function deleteSessionsForAssistant(assistantId: string): Promise<string[]> {
+  const list = await load()
+  const mine = list.filter((s) => s.assistantId === assistantId)
+  if (mine.length === 0) return []
+  const termIds: string[] = []
+  for (const s of mine) {
+    for (const t of s.terminals) termIds.push(t.id)
+    await fs.rm(path.join(logsDir, s.id), { recursive: true, force: true }).catch(() => {})
+  }
+  await persist(list.filter((s) => s.assistantId !== assistantId))
+  return termIds
+}
+
 export async function addTerminal(
   sessionId: string,
   input: { name?: string; cwd?: string; command?: string }

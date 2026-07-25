@@ -500,6 +500,9 @@ export default function App(): JSX.Element {
         <TranscriptSearch
           onClose={() => setShowTranscripts(false)}
           assistant={{ id: active.id, baseDir: active.baseDir }}
+          onResume={(cwd, sessionId) =>
+            bus.emit('openTerm', { name: 'resume', cwd, command: `claude --resume ${sessionId}` })
+          }
         />
       )}
       <ToastHost />

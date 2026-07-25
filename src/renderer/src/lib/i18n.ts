@@ -109,6 +109,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   noResults: { en: 'No matches', tr: 'Eşleşme yok' },
   thisAssistant: { en: 'This assistant', tr: 'Bu assistant' },
   allProjects: { en: 'All', tr: 'Tümü' },
+  resumeSession: { en: 'Resume in new terminal', tr: 'Yeni terminalde devam et' },
   assistantNamePh: { en: 'my-assistant', tr: 'asistanım' },
   minUnit: { en: 'm', tr: 'dk' },
   keepAwake: { en: 'Keep awake', tr: 'Uyanık tut' },

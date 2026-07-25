@@ -195,20 +195,24 @@ export async function searchTranscripts(
         continue
       }
       const lines = content.split('\n')
-      // scope filter by the transcript's real cwd (from its first entry)
-      if (roots.length) {
-        let fileCwd = ''
-        for (const line of lines) {
-          if (!line.trim()) continue
-          try {
-            fileCwd = JSON.parse(line).cwd || ''
-          } catch {
-            continue
+      // the transcript's REAL cwd (from its first entry) — used for scope
+      // filtering and, crucially, for `claude --resume` to find the session
+      // (the decoded slug mangles dir names that contain hyphens).
+      let fileCwd = ''
+      for (const line of lines) {
+        if (!line.trim() || !line.includes('"cwd"')) continue
+        try {
+          const c = JSON.parse(line).cwd
+          if (c) {
+            fileCwd = c
+            break
           }
-          break
+        } catch {
+          continue
         }
-        if (!inScope(fileCwd)) continue
       }
+      if (roots.length && !inScope(fileCwd)) continue
+      const projectCwd = fileCwd || decodeProjectSlug(proj)
       for (const line of lines) {
         // cheap pre-filter before the JSON parse
         if (!line || !line.toLowerCase().includes(q)) continue
@@ -231,7 +235,7 @@ export async function searchTranscripts(
         hits.push({
           file: full,
           sessionId: f.replace(/\.jsonl$/, ''),
-          project: decodeProjectSlug(proj),
+          project: projectCwd,
           role: obj.type,
           snippet,
           timestamp: obj.timestamp,

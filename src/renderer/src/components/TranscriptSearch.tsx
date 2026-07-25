@@ -30,15 +30,17 @@ function when(ts?: string): string {
 
 export default function TranscriptSearch({
   onClose,
-  assistant
+  assistant,
+  onResume
 }: {
   onClose: () => void
   assistant?: { id: string; baseDir: string }
+  onResume?: (cwd: string, sessionId: string) => void
 }): JSX.Element {
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<TranscriptHit[]>([])
   const [loading, setLoading] = useState(false)
-  const [openFile, setOpenFile] = useState<string | null>(null)
+  const [openHit, setOpenHit] = useState<TranscriptHit | null>(null)
   const [messages, setMessages] = useState<SessionMessage[]>([])
   const [allScope, setAllScope] = useState(true) // default: all projects
   const [scopeCwds, setScopeCwds] = useState<string[]>([])
@@ -72,17 +74,22 @@ export default function TranscriptSearch({
     }
   }, [q, allScope, scopeCwds])
 
-  async function openTranscript(file: string): Promise<void> {
-    setOpenFile(file)
-    setMessages(await window.api.readSession(file))
+  async function openTranscript(hit: TranscriptHit): Promise<void> {
+    setOpenHit(hit)
+    setMessages(await window.api.readSession(hit.file))
+  }
+
+  function resume(hit: TranscriptHit): void {
+    onResume?.(hit.project, hit.sessionId)
+    onClose()
   }
 
   // scroll the reader to the first highlighted match
   useEffect(() => {
-    if (!openFile) return
+    if (!openHit) return
     const el = readerRef.current?.querySelector('mark')
     el?.scrollIntoView({ block: 'center' })
-  }, [messages, openFile])
+  }, [messages, openHit])
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -115,18 +122,28 @@ export default function TranscriptSearch({
           </button>
         </div>
 
-        {openFile ? (
+        {openHit ? (
           <>
-            <button className="ts-back" onClick={() => setOpenFile(null)}>
-              ← {t('backToResults')}
-            </button>
+            <div className="ts-reader-head">
+              <button className="ts-back" onClick={() => setOpenHit(null)}>
+                ← {t('backToResults')}
+              </button>
+              <span className="ts-sid" title={openHit.sessionId}>
+                {openHit.sessionId.slice(0, 8)}
+              </span>
+              {onResume && (
+                <button className="btn sm ts-resume" onClick={() => resume(openHit)}>
+                  ↪ {t('resumeSession')}
+                </button>
+              )}
+            </div>
             <div className="ts-reader" ref={readerRef}>
-            {messages.map((m, i) => (
-              <div key={i} className={`ts-msg ${m.role}`}>
-                <span className="ts-role">{m.role === 'user' ? t('you') : 'Claude'}</span>
-                <div className="ts-text">{highlight(m.text, q)}</div>
-              </div>
-            ))}
+              {messages.map((m, i) => (
+                <div key={i} className={`ts-msg ${m.role}`}>
+                  <span className="ts-role">{m.role === 'user' ? t('you') : 'Claude'}</span>
+                  <div className="ts-text">{highlight(m.text, q)}</div>
+                </div>
+              ))}
             </div>
           </>
         ) : (
@@ -136,16 +153,31 @@ export default function TranscriptSearch({
               <div className="ts-empty">{t('noResults')}</div>
             )}
             {hits.map((h, i) => (
-              <button key={i} className="ts-hit" onClick={() => openTranscript(h.file)}>
+              <div key={i} className="ts-hit" onClick={() => openTranscript(h)}>
                 <div className="ts-hit-top">
                   <span className={`ts-role ${h.role}`}>
                     {h.role === 'user' ? t('you') : 'Claude'}
                   </span>
                   <span className="ts-proj">{h.project.replace(/^.*\//, '')}</span>
+                  <span className="ts-sid" title={h.sessionId}>
+                    {h.sessionId.slice(0, 8)}
+                  </span>
                   <span className="ts-date">{when(h.timestamp)}</span>
+                  {onResume && (
+                    <button
+                      className="ts-resume"
+                      title={t('resumeSession')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        resume(h)
+                      }}
+                    >
+                      ↪
+                    </button>
+                  )}
                 </div>
                 <div className="ts-snippet">{highlight(h.snippet, q)}</div>
-              </button>
+              </div>
             ))}
           </div>
         )}

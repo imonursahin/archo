@@ -227,6 +227,7 @@ import {
   setTerminalClaude,
   markTerminalRanClaude,
   setTerminalBg,
+  deleteSessionsForAssistant,
   readTerminalLog,
   logPathFor
 } from './sessions'
@@ -321,7 +322,23 @@ function registerIpc(): void {
   handle('engines:list', () => listEngines())
   handle('assistants:list', () => listAssistants())
   handle('assistant:create', (input) => createAssistant(input))
-  handle('assistant:delete', (id: string, files: boolean) => deleteAssistant(id, files))
+  handle('assistant:delete', async (id: string, files: boolean) => {
+    const baseDir = await assistantBaseDir(id)
+    // kill live terminals + wipe the assistant's sessions and recorded logs
+    const termIds = await deleteSessionsForAssistant(id)
+    for (const tid of termIds) killTerm(tid)
+    await deleteAssistant(id, files)
+    // when deleting files too, also remove the Claude transcripts for this dir
+    if (files && baseDir) {
+      const slug = baseDir.replace(/[/.]/g, '-')
+      await fs.promises
+        .rm(path.join(os.homedir(), '.claude', 'projects', slug), {
+          recursive: true,
+          force: true
+        })
+        .catch(() => {})
+    }
+  })
   handle('assistant:run', (id: string) => getRunInfo(id))
   // resources
   handle('resources:list', (assistantId: string) => getResources(assistantId))

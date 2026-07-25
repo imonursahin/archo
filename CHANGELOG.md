@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.10
+
+**New**
+- **Resume from search** — transcript search now shows each result's session id and a "Resume in new terminal" button that reopens that exact Claude conversation with `claude --resume`.
+
+**Fixed**
+- Deleting an assistant now leaves nothing behind — its terminal sessions, recorded logs, and (when you delete its files) its folder and Claude transcripts are all removed. Deleting a single session never touches your Claude conversations.
+
 ## 0.1.9
 
 **New**
