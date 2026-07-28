@@ -151,6 +151,34 @@ textarea {
   display: grid;
   grid-template-columns: 248px 1fr;
   min-height: 0;
+  position: relative;
+}
+.body.sidebar-collapsed {
+  grid-template-columns: 36px 1fr;
+}
+.sidebar.collapsed {
+  align-items: center;
+  padding-top: 10px;
+}
+.sidebar-collapse-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-3);
+}
+.sidebar-collapse-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sidebar-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .left-col {
@@ -1181,6 +1209,10 @@ textarea {
   grid-template-rows: 1fr auto;
   min-width: 0;
   min-height: 0;
+  /* pin to the 2nd track explicitly — when the sidebar unmounts (collapsed),
+     this is the only auto-placed grid item left and would otherwise fall
+     into the (now 0-width) 1st column instead of the 1fr one */
+  grid-column: 2;
 }
 
 /* ---------- Sidebar ---------- */
@@ -1190,6 +1222,11 @@ textarea {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+.sidebar-drop-overlay {
+  position: absolute;
+  inset: 0;
 }
 .sidebar .search {
   padding: 10px;
@@ -3870,6 +3907,7 @@ textarea {
   font-size: 11.5px;
 }
 .st-file-row:hover { background: var(--bg-3); }
+.st-file-row.dir .st-file-path { color: var(--accent); font-weight: 500; }
 .st-at { color: var(--accent); font-weight: 700; }
 .st-fan-input {
   width: 100%;

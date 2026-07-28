@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Editor from './components/Editor'
 import McpPanel from './components/McpPanel'
@@ -25,6 +25,9 @@ export default function App(): JSX.Element {
   const [engines, setEngines] = useState<EngineDef[]>([])
   const [assistants, setAssistants] = useState<Assistant[]>([])
   const [active, setActive] = useState<Assistant | null>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebarCollapsed') === '1'
+  )
   const [groups, setGroups] = useState<ResourceGroups | null>(null)
   const [selected, setSelected] = useState<ResourceItem | null>(null)
   const [dirtyPath, setDirtyPath] = useState<string | null>(null)
@@ -43,7 +46,6 @@ export default function App(): JSX.Element {
   }, [])
   const [, forceRender] = useState(0)
   const [dropped, setDropped] = useState<{ name: string; content: string } | null>(null)
-  const [dragging, setDragging] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
   const [showFind, setShowFind] = useState(false)
   const [showTranscripts, setShowTranscripts] = useState(false)
@@ -236,12 +238,8 @@ export default function App(): JSX.Element {
     setShowCreate(true)
   }
 
-  async function onDropFiles(e: DragEvent<HTMLDivElement>): Promise<void> {
-    e.preventDefault()
-    setDragging(false)
+  async function onDropFile(file: File): Promise<void> {
     if (!active) return
-    const file = Array.from(e.dataTransfer.files).find((f) => /\.(md|mdc|json)$/i.test(f.name))
-    if (!file) return
     const content = await file.text()
     setDropped({ name: file.name.replace(/\.(md|mdc|json)$/i, ''), content })
     setShowCreate(true)
@@ -355,25 +353,7 @@ export default function App(): JSX.Element {
 
   // ---------- Workbench ----------
   return (
-    <div
-      className="app"
-      onDragOver={(e) => {
-        // only react to files dragged in from OUTSIDE the app; internal
-        // item reordering drags carry no "Files" type and must be ignored
-        if (!Array.from(e.dataTransfer.types).includes('Files')) return
-        e.preventDefault()
-        if (!dragging) setDragging(true)
-      }}
-      onDragLeave={(e) => {
-        if (e.clientX === 0 && e.clientY === 0) setDragging(false)
-      }}
-      onDrop={onDropFiles}
-    >
-      {dragging && (
-        <div className="drop-overlay">
-          <div className="drop-box">{t('dropHint')}</div>
-        </div>
-      )}
+    <div className="app">
       <div className="titlebar">
         <button className="back-btn" onClick={() => setActive(null)}>
           ← {t('assistants')}
@@ -414,7 +394,7 @@ export default function App(): JSX.Element {
         </div>
       </div>
 
-      <div className="body">
+      <div className={`body ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         <Sidebar
           assistantId={active.id}
           groups={groups}
@@ -428,6 +408,14 @@ export default function App(): JSX.Element {
           onDuplicate={duplicateResource}
           onTogglePlugin={togglePlugin}
           onToggleMcp={toggleMcp}
+          onDropFile={onDropFile}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() =>
+            setSidebarCollapsed((v) => {
+              localStorage.setItem('sidebarCollapsed', v ? '0' : '1')
+              return !v
+            })
+          }
         />
 
         <div className="main-col">

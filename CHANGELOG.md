@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.11
+
+**New**
+- **Collapsible resource sidebar** — hide it down to a slim strip to give sessions and terminals more room, without touching them at all.
+- **Drag a file into the terminal** to insert its path, and the `@file` picker can now reference whole folders, not just files.
+- **Much more accurate "Claude is done" notifications** — instead of guessing from a fixed idle timeout, this reads Claude's own busy indicator directly, so it no longer fires early while Claude is still thinking/writing, or lingers late after it's actually finished.
+
+**Fixed**
+- Dragging a file onto the terminal no longer opens the "create resource" dialog — that's scoped to the sidebar now.
+- A crash where collapsing the sidebar could blank the whole window.
+
 ## 0.1.10
 
 **New**

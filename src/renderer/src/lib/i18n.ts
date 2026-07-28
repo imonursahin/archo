@@ -98,6 +98,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   version: { en: 'Version', tr: 'Sürüm' },
   developer: { en: 'Developer', tr: 'Geliştirici' },
   color: { en: 'Color', tr: 'Renk' },
+  showSidebar: { en: 'Show sidebar', tr: 'Sidebar\'ı göster' },
+  hideSidebar: { en: 'Hide sidebar', tr: 'Sidebar\'ı gizle' },
   searchTranscripts: { en: 'Search transcripts', tr: 'Transcript\'lerde ara' },
   searchTranscriptsPh: {
     en: 'Search all Claude conversations…',

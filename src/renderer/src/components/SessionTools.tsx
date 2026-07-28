@@ -28,6 +28,7 @@ interface FileEntry {
   label: string // shown text (relative path)
   insert: string // what goes after @ (relative for cwd, absolute for extra dirs)
   badge: string // extra-dir short name, '' for cwd
+  isDir: boolean
 }
 
 export default function SessionTools({
@@ -111,11 +112,12 @@ export default function SessionTools({
       roots.map(async ({ dir, external }) => {
         const list = await window.api.listFiles(dir)
         const short = dir.replace(/^.*\/(?=[^/]+$)/, '')
-        return list.map((rel) => ({
+        return list.map(({ path: rel, isDir }) => ({
           key: `${dir}/${rel}`,
           label: rel,
           insert: external ? `${dir.replace(/\/$/, '')}/${rel}` : rel,
-          badge: external ? short : ''
+          badge: external ? short : '',
+          isDir
         }))
       })
     ).then((groups) => {
@@ -367,11 +369,11 @@ export default function SessionTools({
             {filteredFiles.slice(0, 300).map((f) => (
               <div
                 key={f.key}
-                className="st-file-row"
+                className={`st-file-row ${f.isDir ? 'dir' : ''}`}
                 title={f.insert}
-                onClick={() => inject(`@${f.insert} `)}
+                onClick={() => inject(`@${f.insert}${f.isDir ? '/' : ''} `)}
               >
-                <span className="st-at">@</span>
+                <span className="st-at">{f.isDir ? '📁' : '@'}</span>
                 {f.badge && <span className="st-file-badge">{f.badge}</span>}
                 <span className="st-file-path">{f.label}</span>
               </div>

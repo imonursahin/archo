@@ -18,6 +18,9 @@ interface Props {
   onDuplicate: (item: ResourceItem) => void
   onTogglePlugin: (item: ResourceItem, enabled: boolean) => void
   onToggleMcp: (item: ResourceItem, enabled: boolean) => void
+  onDropFile?: (file: File) => void
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
 }
 
 // which kinds can be deleted from the sidebar
@@ -52,9 +55,13 @@ export default function Sidebar({
   onDelete,
   onDuplicate,
   onTogglePlugin,
-  onToggleMcp
+  onToggleMcp,
+  onDropFile,
+  collapsed: sidebarHidden,
+  onToggleCollapsed
 }: Props): JSX.Element {
   const [query, setQuery] = useState('')
+  const [fileDragging, setFileDragging] = useState(false)
   const [menu, setMenu] = useState<{ item: ResourceItem; x: number; y: number } | null>(null)
   const [favTick, setFavTick] = useState(0)
   // MCP + Plugins collapsed by default
@@ -237,8 +244,45 @@ export default function Sidebar({
     )
   }
 
+  if (sidebarHidden) {
+    return (
+      <aside className="sidebar collapsed">
+        <button
+          className="sidebar-collapse-btn"
+          onClick={onToggleCollapsed}
+          title={t('showSidebar')}
+        >
+          ›
+        </button>
+      </aside>
+    )
+  }
+
   return (
-    <aside className="sidebar">
+    <aside
+      className="sidebar"
+      onDragOver={(e) => {
+        if (!onDropFile || !Array.from(e.dataTransfer.types).includes('Files')) return
+        e.preventDefault()
+        if (!fileDragging) setFileDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (e.clientX === 0 && e.clientY === 0) setFileDragging(false)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        setFileDragging(false)
+        const file = Array.from(e.dataTransfer.files).find((f) =>
+          /\.(md|mdc|json)$/i.test(f.name)
+        )
+        if (file) onDropFile?.(file)
+      }}
+    >
+      {fileDragging && (
+        <div className="drop-overlay sidebar-drop-overlay">
+          <div className="drop-box">{t('dropHint')}</div>
+        </div>
+      )}
       <div className="search">
         <span className="search-ic">
           <Icon name="search" size={14} />
@@ -251,6 +295,11 @@ export default function Sidebar({
         <button className="collapse-all" onClick={toggleAll} title={t('collapseAll')}>
           {allCollapsed ? '⊞' : '⊟'}
         </button>
+        {onToggleCollapsed && (
+          <button className="collapse-all" onClick={onToggleCollapsed} title={t('hideSidebar')}>
+            ‹
+          </button>
+        )}
       </div>
       <button className="add-resource" onClick={() => onNew()}>
         <Icon name="plus" size={14} /> {t('addResource')}

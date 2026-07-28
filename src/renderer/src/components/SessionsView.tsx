@@ -354,7 +354,19 @@ function TermInstance({
   }, [visible, dead, isClaudeTerm])
 
   return (
-    <div className={`xterm-wrap ${visible ? '' : 'hidden'}`}>
+    <div
+      className={`xterm-wrap ${visible ? '' : 'hidden'}`}
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer.types).includes('Files')) e.preventDefault()
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        const paths = Array.from(e.dataTransfer.files)
+          .map((f) => window.api.getFilePath(f))
+          .filter(Boolean)
+        if (paths.length) window.api.ptyWrite(term.id, paths.map((p) => `'${p}' `).join(''))
+      }}
+    >
       <div className="xterm-host" ref={hostRef} />
       {/* claude: centered resume card (no meaningful scrollback to show) */}
       {dead && isClaudeTerm && (

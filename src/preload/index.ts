@@ -1,6 +1,9 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const api = {
+  // File.path was removed in Electron 32+; this is the replacement for
+  // resolving a dropped File object to its absolute filesystem path.
+  getFilePath: (file: File) => webUtils.getPathForFile(file),
   // engines + assistants
   listEngines: () => ipcRenderer.invoke('engines:list'),
   listAssistants: () => ipcRenderer.invoke('assistants:list'),

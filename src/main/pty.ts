@@ -27,7 +27,31 @@ interface Term {
   running: boolean // an output burst is in progress
   busySent: boolean // spinner (busy:true) already emitted for this burst
   notified: boolean // done-notification already fired for this burst
+  recentRaw: string // small rolling window of the most recently RECEIVED bytes
+  lastMarkerAt: number // last time the busy marker appeared in a fresh chunk
+  sawMarkerThisBurst: boolean // the marker appeared at least once during this burst
 }
+
+// Claude Code shows a status line for as long as it's actively thinking,
+// streaming, or running a tool — regardless of phase (thinking/tool-use/
+// responding), it always ends with "esc to interrupt". The spinner glyphs are
+// a secondary signal in case the phrasing ever varies.
+//
+// IMPORTANT: this is checked against a small rolling window of the most
+// RECENTLY RECEIVED bytes only (not the accumulated session buffer). Claude's
+// status line is redrawn in place many times per second, and each redraw is
+// its own small chunk appended to the raw byte stream — scanning historical
+// buffer content would keep finding stale, already-overwritten "esc to
+// interrupt" text from several redraws ago long after Claude actually
+// finished, firing the notification much later than the real completion.
+const BUSY_MARKER_RE = /esc to interrupt|ctrl-c to interrupt/i
+const BUSY_GLYPH_RE = /[✢✳∗✻✽]\s+\S+…/ // "<spinner> Thinking…" style status lines
+const RECENT_WINDOW = 1200 // enough to catch a marker split across chunks
+// Once the busy marker stops appearing in freshly-received chunks, wait this
+// long before trusting it's really done — a short debounce against a
+// single-frame redraw gap, not a safety margin (kept short on purpose so the
+// notification doesn't lag behind the real completion).
+const MARKER_SETTLE_MS = 1200
 
 // A burst must produce at least this many bytes to count as "real work"
 // (Claude streaming / a running command) rather than keystroke echo or a
@@ -71,24 +95,36 @@ function ensureIdleWatch(): void {
     const now = Date.now()
     for (const t of terms.values()) {
       if (!t.running) continue
-      if (now - t.lastData > 1500) {
-        // burst ended
-        t.running = false
-        // real work = heavy output that kept coming AFTER the user stopped typing
-        // (Claude/command keeps producing; typing ends the moment you stop). If the
-        // last output landed right after your last keystroke, it was just echo.
-        const outlivedInput = t.lastData - t.lastInput > 700
-        const wasWork = t.busySent && outlivedInput
-        if (t.busySent) send('pty:busy', { id: t.id, busy: false })
-        t.inputBytes = 0 // reset echo accounting for the next burst
-        if (wasWork && !t.notified) {
-          t.notified = true
-          send('pty:done', {
-            id: t.id,
-            lastLine: lastLine(t.buffer),
-            durationSec: (t.lastData - t.burstStart) / 1000
-          })
-        }
+      let burstOver: boolean
+      if (t.sawMarkerThisBurst) {
+        // Claude terminal: the status line doesn't necessarily repaint on
+        // every single chunk (e.g. while a tool is writing a large file, the
+        // content itself can dominate several chunks in a row) — so require
+        // BOTH the marker to be stale AND raw output to have actually gone
+        // quiet. Either signal alone can be wrong: marker-only misses "still
+        // writing code" bursts with no marker in the immediate chunk;
+        // lastData-only is the old guessing game this was built to replace.
+        burstOver = now - t.lastMarkerAt > MARKER_SETTLE_MS && now - t.lastData > 500
+      } else {
+        // plain shell command: no marker ever seen — fall back to the
+        // byte/typing idle heuristic exactly as before.
+        burstOver = now - t.lastData > 1500
+      }
+      if (!burstOver) continue
+      // burst ended
+      t.running = false
+      const wasWork = t.sawMarkerThisBurst
+        ? true // we directly observed Claude's busy indicator and it's now gone
+        : t.busySent && t.lastData - t.lastInput > 700 // outlived the user's typing
+      if (t.busySent) send('pty:busy', { id: t.id, busy: false })
+      t.inputBytes = 0 // reset echo accounting for the next burst
+      if (wasWork && !t.notified) {
+        t.notified = true
+        send('pty:done', {
+          id: t.id,
+          lastLine: lastLine(t.buffer),
+          durationSec: (t.lastData - t.burstStart) / 1000
+        })
       }
     }
   }, 500)
@@ -179,7 +215,10 @@ export function createTerm(
     lastInput: 0,
     running: false,
     busySent: false,
-    notified: false
+    notified: false,
+    recentRaw: '',
+    lastMarkerAt: 0,
+    sawMarkerThisBurst: false
   }
   terms.set(id, term)
   mainWin = win
@@ -198,9 +237,26 @@ export function createTerm(
       term.burstBytes = 0
       term.busySent = false
       term.notified = false
+      term.sawMarkerThisBurst = false
+      term.recentRaw = ''
     }
     term.burstBytes += data.length
     term.lastData = now
+    // Claude's own busy indicator, checked against a small rolling window of
+    // just-received bytes (NOT the accumulated buffer — see the comment on
+    // BUSY_MARKER_RE for why that matters). A hit means Claude painted its
+    // status line in THIS chunk, so it's still genuinely working right now.
+    term.recentRaw = (term.recentRaw + data).slice(-RECENT_WINDOW)
+    const recentClean = stripAnsi(term.recentRaw)
+    const markerNow = BUSY_MARKER_RE.test(recentClean) || BUSY_GLYPH_RE.test(recentClean)
+    if (markerNow) {
+      term.lastMarkerAt = now
+      term.sawMarkerThisBurst = true
+      if (!term.busySent) {
+        term.busySent = true
+        send('pty:busy', { id, busy: true })
+      }
+    }
     // "work" only when the output clearly exceeds the echo of what the user is
     // typing (output >> keystrokes). Typing/paste echoes ~1:1 and never trips this.
     if (!term.busySent && term.burstBytes > BUSY_BYTES && term.burstBytes > term.inputBytes * 3) {

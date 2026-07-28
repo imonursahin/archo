@@ -430,9 +430,9 @@ function registerIpc(): void {
   )
   // ---- @file context picker: list files in a working dir ----
   handle('fs:listFiles', async (dir: string) => {
-    if (!dir) return [] as string[]
+    if (!dir) return [] as { path: string; isDir: boolean }[]
     const SKIP = /(^|\/)(node_modules|\.git|dist|build|\.next|out|\.turbo|coverage|\.venv|__pycache__)(\/|$)/
-    const out: string[] = []
+    const out: { path: string; isDir: boolean }[] = []
     const walk = async (d: string, rel: string): Promise<void> => {
       if (out.length > 4000) return
       let entries: fs.Dirent[] = []
@@ -444,12 +444,14 @@ function registerIpc(): void {
       for (const e of entries) {
         const rp = rel ? `${rel}/${e.name}` : e.name
         if (SKIP.test(rp) || e.name.startsWith('.DS_Store')) continue
-        if (e.isDirectory()) await walk(path.join(d, e.name), rp)
-        else if (e.isFile()) out.push(rp)
+        if (e.isDirectory()) {
+          out.push({ path: rp, isDir: true })
+          await walk(path.join(d, e.name), rp)
+        } else if (e.isFile()) out.push({ path: rp, isDir: false })
       }
     }
     await walk(dir, '')
-    return out.sort()
+    return out.sort((a, b) => a.path.localeCompare(b.path))
   })
   // ---- paste screenshot from clipboard → temp png path (for Claude vision) ----
   handle('clipboard:saveImage', async () => {
