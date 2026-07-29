@@ -40,9 +40,17 @@ export default function App(): JSX.Element {
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [showUpdate, setShowUpdate] = useState(false)
   useEffect(() => {
-    window.api.checkUpdate().then((r) => {
-      if (r.hasUpdate) setUpdate({ current: r.current, latest: r.latest, url: r.url, notes: r.notes })
-    })
+    const check = (): void => {
+      window.api.checkUpdate().then((r) => {
+        if (r.hasUpdate) setUpdate({ current: r.current, latest: r.latest, url: r.url, notes: r.notes })
+      })
+    }
+    check()
+    // re-check periodically so the header chip can appear during a long-running
+    // session too, not just after a fresh launch (checkUpdate hits GitHub's
+    // API, so keep this infrequent — a new release isn't a minute-to-minute event)
+    const interval = setInterval(check, 4 * 60 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
   const [, forceRender] = useState(0)
   const [dropped, setDropped] = useState<{ name: string; content: string } | null>(null)

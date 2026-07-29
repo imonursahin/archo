@@ -183,10 +183,17 @@ export function createTerm(
   // login chain, which on heavy dotfiles is dramatically faster to start
   const args =
     opts.silent && opts.command ? ['-i', '-c', `${opts.command}; exec ${shell} -i`] : ['-i']
+  // Generously wide/tall default: the real size only arrives a moment later
+  // via ptyResize (once the renderer mounts xterm.js and measures the actual
+  // container), and a TUI that paints its first frame before that lands
+  // (e.g. Claude Code) bakes in whatever width it's spawned with. Too narrow
+  // (the old 80x24) leaves that first content stuck short forever once it's
+  // scrolled into history — no terminal reflows the past. Too wide just
+  // soft-wraps harmlessly in xterm once the real (narrower) size lands.
   const proc = pty.spawn(shell, args, {
     name: 'xterm-color',
-    cols: opts.cols || 80,
-    rows: opts.rows || 24,
+    cols: opts.cols || 220,
+    rows: opts.rows || 50,
     cwd: safeCwd(opts.cwd),
     env: cleanEnv()
   })

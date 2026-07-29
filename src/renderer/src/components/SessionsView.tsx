@@ -31,6 +31,11 @@ const theme = {
 // terminals whose PTY was started during this app run
 const started = new Set<string>()
 
+// most recent real cols/rows any terminal fit to — new terminals share the
+// same session pane, so this is a reliable size hint before their own xterm
+// has mounted, avoiding the wide/narrow spawn-size guess for the first frame.
+let lastKnownSize: { cols: number; rows: number } | null = null
+
 // preset tab colors (first = default/none) — muted but visible on the dark tab bar
 const TAB_BGS = ['', '#3a3a42', '#2b4a6f', '#265c43', '#4a2f6b', '#6b2f38', '#6b5320', '#245b5e']
 // claude session ids already assigned to a terminal (so two terminals in the
@@ -84,7 +89,12 @@ function TermInstance({
   useEffect(() => {
     const xterm = new Terminal({
       fontFamily: "'SF Mono', ui-monospace, Menlo, monospace",
-      fontSize: 12.5,
+      // whole-pixel size: a fractional value (e.g. 12.5) renders to a clean
+      // integer device pixel on a Retina (2x) display but stays fractional on
+      // a 1x external monitor, where xterm's measured cell width and the
+      // actual rounded render drift apart — cutting off the right edge and
+      // leaving background fills (e.g. Claude's input-row shading) gappy.
+      fontSize: 13,
       theme,
       cursorBlink: true,
       allowProposedApi: true,
@@ -114,7 +124,9 @@ function TermInstance({
       return true
     })
 
-    // Cmd+C copies the selection (Ctrl+C stays SIGINT); Cmd+V pastes.
+    // Cmd+C copies the selection (Ctrl+C stays SIGINT). Cmd+V is left to
+    // xterm.js's own native paste handling (it already writes the OS clipboard
+    // via the browser's paste event) — handling it here too double-pastes.
     // Shift+Enter inserts a newline (Claude reads ESC-CR as a soft newline).
     xterm.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
@@ -126,10 +138,6 @@ function TermInstance({
       if (e.type !== 'keydown' || !e.metaKey) return true
       if (e.key === 'c' && xterm.hasSelection()) {
         navigator.clipboard.writeText(xterm.getSelection())
-        return false
-      }
-      if (e.key === 'v') {
-        navigator.clipboard.readText().then((txt) => txt && window.api.ptyWrite(term.id, txt))
         return false
       }
       return true
@@ -242,6 +250,7 @@ function TermInstance({
       try {
         fit.fit()
         window.api.ptyResize(term.id, xterm.cols, xterm.rows)
+        lastKnownSize = { cols: xterm.cols, rows: xterm.rows }
       } catch {
         /* ignore */
       }
@@ -279,20 +288,56 @@ function TermInstance({
       pending.length = 0
     })()
 
+    // Keep the local xterm.js display fitted on every tick (cheap, just CSS/
+    // canvas re-layout), but debounce the actual ptyResize call: that one
+    // triggers a SIGWINCH the child process (e.g. Claude's Ink-based TUI)
+    // must fully repaint for. A live window drag fires many ResizeObserver
+    // ticks per second — sending each one straight through gives the TUI no
+    // chance to finish a clean repaint before the next resize lands, leaving
+    // stale wider-frame content stuck in some rows. Only notify the pty once
+    // the size has settled.
+    let resizeSettleTimer: ReturnType<typeof setTimeout> | undefined
     const ro = new ResizeObserver(() => {
       try {
         fit.fit()
-        window.api.ptyResize(term.id, xterm.cols, xterm.rows)
       } catch {
         /* ignore */
       }
+      clearTimeout(resizeSettleTimer)
+      resizeSettleTimer = setTimeout(() => {
+        try {
+          window.api.ptyResize(term.id, xterm.cols, xterm.rows)
+          lastKnownSize = { cols: xterm.cols, rows: xterm.rows }
+        } catch {
+          /* ignore */
+        }
+      }, 120)
     })
     ro.observe(hostRef.current!)
+
+    // dragging the window to a display with a different scale factor (e.g.
+    // Retina laptop screen -> a 1x external monitor) doesn't change the host's
+    // CSS pixel size, so ResizeObserver never fires — but the measured cell
+    // width does change, leaving cols stale and the right edge cut off until
+    // something else forces a refit. Watch devicePixelRatio directly.
+    let dprMql: MediaQueryList
+    const watchDpr = (): void => {
+      dprMql = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+      dprMql.addEventListener('change', onDprChange)
+    }
+    function onDprChange(): void {
+      dprMql.removeEventListener('change', onDprChange)
+      refit()
+      watchDpr()
+    }
+    watchDpr()
 
     return () => {
       offData()
       offExit()
       ro.disconnect()
+      clearTimeout(resizeSettleTimer)
+      dprMql.removeEventListener('change', onDprChange)
       refitTimers.forEach(clearTimeout)
       linkProvider.dispose()
       xterm.dispose() // keep PTY alive; just detach the view
@@ -305,6 +350,7 @@ function TermInstance({
         try {
           fitRef.current!.fit()
           window.api.ptyResize(term.id, xtermRef.current!.cols, xtermRef.current!.rows)
+          lastKnownSize = { cols: xtermRef.current!.cols, rows: xtermRef.current!.rows }
           xtermRef.current!.focus()
         } catch {
           /* ignore */
@@ -335,7 +381,13 @@ function TermInstance({
       cwd: term.cwd,
       command: cmd || undefined,
       silent: !!cmd, // run the resume command without echoing it
-      recordPath: logPath
+      recordPath: logPath,
+      // xterm is already mounted and fitted to the real container here — use
+      // its actual size instead of falling back to the spawn default, which
+      // (being a generic guess) can be far wider than the real terminal and
+      // make Claude's first frame wrap chaotically until the next resize lands.
+      cols: xtermRef.current?.cols,
+      rows: xtermRef.current?.rows
     })
     started.add(term.id)
     setDead(false)
@@ -588,7 +640,9 @@ export default function SessionsView({
       cwd: terminal.cwd,
       command: terminal.command,
       silent: !!terminal.command,
-      recordPath: logPath
+      recordPath: logPath,
+      cols: lastKnownSize?.cols,
+      rows: lastKnownSize?.rows
     })
     started.add(terminal.id)
     setLogPaths((p) => ({ ...p, [terminal.id]: logPath }))
@@ -616,7 +670,9 @@ export default function SessionsView({
         cwd: terminal.cwd,
         command: terminal.command,
         silent: !!terminal.command,
-        recordPath: logPath
+        recordPath: logPath,
+        cols: lastKnownSize?.cols,
+        rows: lastKnownSize?.rows
       })
       started.add(terminal.id)
       setLogPaths((p) => ({ ...p, [terminal.id]: logPath }))

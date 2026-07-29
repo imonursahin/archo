@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+**Fixed**
+- Pasting into a terminal no longer inserts the clipboard text twice.
+- Terminal sizing is more robust across window resizes, external-display changes, and resumed Claude sessions — content no longer gets stuck at a stale width.
+- The update badge now also appears while the app is already open (checked periodically), not just after relaunching.
+
 ## 0.1.11
 
 **New**
