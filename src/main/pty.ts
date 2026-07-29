@@ -145,6 +145,12 @@ function cleanEnv(): Record<string, string> {
   env.TERM = 'xterm-256color'
   env.TERM_PROGRAM = 'AgentStudio'
   env.TERM_SESSION_ID = ''
+  // Archo is launched from Finder/GUI, not a shell, so COLORTERM is never
+  // inherited — without it, truecolor-aware TUIs (Claude Code included) can't
+  // tell this terminal supports 24-bit color and skip background fills like
+  // input-row shading (it already asks our OSC 11 for the bg color to shade
+  // against; it just needs the capability signal to actually use it).
+  env.COLORTERM = 'truecolor'
   // We spawn an interactive (not login) shell for speed, so login-only PATH
   // entries (e.g. Homebrew from .zprofile) may be missing when the app is
   // launched from Finder. Guarantee a sane PATH floor so brew/claude resolve.

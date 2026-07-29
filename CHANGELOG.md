@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13
+
+**Fixed**
+- Claude Code's own input-row shading (and other truecolor-aware TUIs) now actually renders — Archo launches from Finder rather than a shell, so the spawned terminal never advertised 24-bit color support (`COLORTERM`), leaving that shading with nothing to draw against.
+
 ## 0.1.12
 
 **Fixed**
