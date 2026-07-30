@@ -71,6 +71,7 @@ const api = {
     ipcRenderer.invoke('session:removeCheckpoint', id, sha),
   listFiles: (dir: string) => ipcRenderer.invoke('fs:listFiles', dir),
   saveClipboardImage: () => ipcRenderer.invoke('clipboard:saveImage'),
+  hasClipboardImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   notify: (title: string, body: string, meta?: object) =>
     ipcRenderer.invoke('notify', title, body, meta),
   onNotifClick: (

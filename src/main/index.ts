@@ -461,6 +461,7 @@ function registerIpc(): void {
     await fs.promises.writeFile(file, img.toPNG())
     return { ok: true as const, path: file }
   })
+  handle('clipboard:hasImage', () => !clipboard.readImage().isEmpty())
   // ---- desktop notification (terminal task finished / waiting) ----
   handle(
     'notify',

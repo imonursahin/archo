@@ -241,6 +241,7 @@ export interface StudioApi {
   listFiles(dir: string): Promise<{ path: string; isDir: boolean }[]>
   getFilePath(file: File): string
   saveClipboardImage(): Promise<{ ok: boolean; path?: string }>
+  hasClipboardImage(): Promise<boolean>
   notify(
     title: string,
     body: string,

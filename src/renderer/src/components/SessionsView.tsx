@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { bus, type OpenTermRequest } from '../lib/bus'
 import SessionTools from './SessionTools'
@@ -56,6 +57,18 @@ function pickClaudeId(
   return (after[0] || free.sort((a, b) => b.mtime - a.mtime)[0]).id
 }
 
+// A few columns narrower than xterm's own fit: TUIs that fill status/footer
+// lines to the exact last column (Claude's included, packed with emoji) can
+// still clip that last character by a hair on residual sub-pixel drift
+// between xterm's column math and actual font metrics — and that drift grows
+// with the row's total width/character count, so a fixed 1-column margin
+// isn't enough at every terminal size. Reporting a few fewer columns to the
+// pty than xterm actually renders leaves a permanent margin that reliably
+// absorbs it, at the cost of a few columns of width.
+function ptyCols(cols: number): number {
+  return Math.max(20, cols - 3)
+}
+
 function relTime(ms: number): string {
   const d = Date.now() - ms
   const m = Math.floor(d / 60000)
@@ -102,8 +115,25 @@ function TermInstance({
     })
     const fit = new FitAddon()
     xterm.loadAddon(fit)
+    // Claude's status line packs several emoji (⚡ 📊 ⏱️) next to plain text.
+    // xterm's default (pre-Unicode-11) width table misjudges how wide some of
+    // those render as, so the accumulated drift across the line clips its
+    // last character(s) against the right edge. The unicode11 addon supplies
+    // the correct wide-character table so FitAddon's column math matches
+    // what's actually drawn.
+    xterm.loadAddon(new Unicode11Addon())
+    xterm.unicode.activeVersion = '11'
     xterm.open(hostRef.current!)
-    fit.fit()
+    // xterm's render service can still be uninitialized the instant after
+    // open() — fit() reads its dimensions and throws "Cannot read properties
+    // of undefined (reading 'dimensions')" if called before it's ready.
+    // requestAnimationFrame(refit) below re-fits safely once it is; this one
+    // is just a best-effort head start.
+    try {
+      fit.fit()
+    } catch {
+      /* ignore */
+    }
     xtermRef.current = xterm
     fitRef.current = fit
 
@@ -139,6 +169,18 @@ function TermInstance({
       if (e.key === 'c' && xterm.hasSelection()) {
         navigator.clipboard.writeText(xterm.getSelection())
         return false
+      }
+      if (e.key === 'v') {
+        // A screenshot/image on the clipboard has no text/plain representation,
+        // so xterm's own native paste (which only reads text) silently does
+        // nothing with it — but Claude Code has its own native image paste
+        // (reads the OS clipboard directly and shows a clean "[Image #1]"),
+        // triggered by Ctrl+V rather than Cmd+V. Forward Cmd+V as Ctrl+V only
+        // when there's actually an image, so plain Cmd+V text paste (handled
+        // natively by xterm above) is untouched.
+        window.api.hasClipboardImage().then((has) => {
+          if (has) window.api.ptyWrite(term.id, '\x16')
+        })
       }
       return true
     })
@@ -178,6 +220,10 @@ function TermInstance({
       }
     })
 
+    // true once cleanup has run — guards the async snapshot/log replay below
+    // from writing to an already-disposed xterm instance if the tab is
+    // switched away (or the terminal closed) before that fetch resolves.
+    let disposed = false
     // dedup live stream against the snapshot using a seq counter
     let wrote = false
     let snapSeq = -1
@@ -202,6 +248,7 @@ function TermInstance({
     // after a restart. Track a simple line buffer; bail on escape sequences
     // (arrow/nav keys) which would otherwise corrupt it.
     let inputLine = ''
+    let claudeCaptureTimer: ReturnType<typeof setInterval> | undefined
     const markClaudeRun = (): void => {
       if (claudeMarkedRef.current) return
       claudeMarkedRef.current = true
@@ -212,17 +259,17 @@ function TermInstance({
     const captureManualClaude = (cwd: string): void => {
       const since = Date.now()
       let tries = 0
-      const timer = setInterval(async () => {
+      claudeCaptureTimer = setInterval(async () => {
         tries++
         const cands = await window.api.detectClaudeSessions(cwd, since)
         const id = pickClaudeId(cands, since)
         if (id) {
-          clearInterval(timer)
+          clearInterval(claudeCaptureTimer)
           claimedClaude.add(id)
           setResumeId(id)
           window.api.setTerminalClaude(sessionId, term.id, id)
         } else if (tries > 20) {
-          clearInterval(timer)
+          clearInterval(claudeCaptureTimer)
         }
       }, 1500)
     }
@@ -249,8 +296,8 @@ function TermInstance({
     const refit = (): void => {
       try {
         fit.fit()
-        window.api.ptyResize(term.id, xterm.cols, xterm.rows)
-        lastKnownSize = { cols: xterm.cols, rows: xterm.rows }
+        window.api.ptyResize(term.id, ptyCols(xterm.cols), xterm.rows)
+        lastKnownSize = { cols: ptyCols(xterm.cols), rows: xterm.rows }
       } catch {
         /* ignore */
       }
@@ -260,11 +307,17 @@ function TermInstance({
 
     ;(async () => {
       const snap = await window.api.terminalSnapshot(term.id)
+      if (disposed) return
       if (snap) {
-        // live terminal: replay accumulated buffer, then continue live
-        if (snap.buffer) xterm.write(snap.buffer)
+        // live terminal: replay accumulated buffer, then continue live.
+        // write() queues large buffers internally and drains them over several
+        // frames — fitting before that drain finishes corrupts xterm's
+        // scrollback bookkeeping (the viewport ends up unable to scroll past
+        // whatever's on screen), so wait for its completion callback instead
+        // of racing a bare requestAnimationFrame against it.
+        if (snap.buffer) xterm.write(snap.buffer, () => requestAnimationFrame(refit))
+        else requestAnimationFrame(refit)
         snapSeq = snap.seq
-        requestAnimationFrame(refit) // re-fit once the replayed buffer is laid out
       } else {
         // dead terminal — treat as a resumable Claude session ONLY if THIS
         // terminal actually ran claude (captured session id, or its command was
@@ -279,7 +332,8 @@ function TermInstance({
           setIsClaudeTerm(true)
         } else {
           const log = await window.api.readTerminalLog(sessionId, term.id)
-          if (log) xterm.write(log)
+          if (disposed) return
+          if (log) xterm.write(log, () => requestAnimationFrame(refit))
         }
         setDead(true)
       }
@@ -306,8 +360,8 @@ function TermInstance({
       clearTimeout(resizeSettleTimer)
       resizeSettleTimer = setTimeout(() => {
         try {
-          window.api.ptyResize(term.id, xterm.cols, xterm.rows)
-          lastKnownSize = { cols: xterm.cols, rows: xterm.rows }
+          window.api.ptyResize(term.id, ptyCols(xterm.cols), xterm.rows)
+          lastKnownSize = { cols: ptyCols(xterm.cols), rows: xterm.rows }
         } catch {
           /* ignore */
         }
@@ -333,8 +387,10 @@ function TermInstance({
     watchDpr()
 
     return () => {
+      disposed = true
       offData()
       offExit()
+      clearInterval(claudeCaptureTimer)
       ro.disconnect()
       clearTimeout(resizeSettleTimer)
       dprMql.removeEventListener('change', onDprChange)
@@ -349,8 +405,8 @@ function TermInstance({
       setTimeout(() => {
         try {
           fitRef.current!.fit()
-          window.api.ptyResize(term.id, xtermRef.current!.cols, xtermRef.current!.rows)
-          lastKnownSize = { cols: xtermRef.current!.cols, rows: xtermRef.current!.rows }
+          window.api.ptyResize(term.id, ptyCols(xtermRef.current!.cols), xtermRef.current!.rows)
+          lastKnownSize = { cols: ptyCols(xtermRef.current!.cols), rows: xtermRef.current!.rows }
           xtermRef.current!.focus()
         } catch {
           /* ignore */
@@ -371,11 +427,15 @@ function TermInstance({
       cmd = raw
     }
     // claude gets a clean screen for its TUI; a plain shell keeps its scrollback
-    // (the recorded history stays visible, the fresh prompt appends below)
-    if (cmd) {
-      xtermRef.current?.reset()
-    } else {
-      xtermRef.current?.write('\r\n')
+    // (the recorded history stays visible, the fresh prompt appends below).
+    // Wrapped defensively: this is just display cleanup — if it throws, the
+    // actual respawn below must still happen, or Resume looks like a dead
+    // button (nothing to show for the click) with no process behind it.
+    try {
+      if (cmd) xtermRef.current?.reset()
+      else xtermRef.current?.write('\r\n')
+    } catch {
+      /* ignore */
     }
     window.api.ptyCreate(term.id, {
       cwd: term.cwd,
@@ -386,7 +446,7 @@ function TermInstance({
       // its actual size instead of falling back to the spawn default, which
       // (being a generic guess) can be far wider than the real terminal and
       // make Claude's first frame wrap chaotically until the next resize lands.
-      cols: xtermRef.current?.cols,
+      cols: xtermRef.current ? ptyCols(xtermRef.current.cols) : undefined,
       rows: xtermRef.current?.rows
     })
     started.add(term.id)

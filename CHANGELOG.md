@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.14
+
+**Fixed**
+- Terminal scrollback was completely unscrollable after resuming a session or reattaching a tab — replaying the saved buffer raced against the initial fit, corrupting xterm's scrollback bookkeeping.
+- Pasting a screenshot/image into a terminal now shows Claude's native `[Image #1]` attachment instead of a raw file path — Cmd+V now defers to Claude's own clipboard-image handling (the same one Ctrl+V already triggered) instead of the old dead-code path.
+- Claude's status line could clip its last character(s) against the right edge, worse at some window widths — added correct Unicode wide-character width handling and a small permanent column margin so nothing sits flush against the edge.
+- A console error on every launch (`Cannot read properties of undefined (reading 'dimensions')`) from fitting the terminal before its renderer had finished initializing.
+- A background timer tracking manually-typed `claude` invocations kept running for up to 30s after closing that terminal.
+- A rare crash writing to an already-closed terminal view if you switched tabs while its scrollback was still loading.
+
 ## 0.1.13
 
 **Fixed**
