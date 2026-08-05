@@ -40,6 +40,127 @@ const DICT: Record<string, { en: string; tr: string }> = {
   instructions: { en: 'Instructions', tr: 'Instructions' },
   newX: { en: 'New', tr: 'Yeni' },
 
+  // tools dashboard
+  tools: { en: 'Dashboard', tr: 'Dashboard' },
+  tvRefresh: { en: 'Refresh', tr: 'Yenile' },
+  tvLoading: { en: 'Loading…', tr: 'Yükleniyor…' },
+  tvLastUpdated: { en: 'updated', tr: 'güncellendi' },
+  tvMyPrs: { en: 'My open PRs', tr: 'Açık PR’larım' },
+  tvReviewRequested: { en: 'Waiting for my review', tr: 'Review bekleyenler' },
+  tvMyIssues: { en: 'My Jira issues', tr: 'Jira işlerim' },
+  tvNoPrs: { en: 'No open pull requests.', tr: 'Açık pull request yok.' },
+  tvNoReviews: { en: 'Nothing waiting on you.', tr: 'Seni bekleyen review yok.' },
+  tvNoIssues: {
+    en: 'Nothing assigned to you in the active sprint.',
+    tr: 'Aktif sprint’te sana atanmış iş yok.'
+  },
+  tvMyIssuesSub: { en: 'active sprint', tr: 'aktif sprint' },
+  tvJiraNotConfigured: {
+    en: 'Jira is not connected — add your credentials in Settings › Integrations.',
+    tr: 'Jira bağlı değil — Ayarlar › Entegrasyonlar’dan bilgilerini gir.'
+  },
+  tvDraft: { en: 'draft', tr: 'draft' },
+  tvCopyLink: { en: 'Copy link', tr: 'Linki kopyala' },
+  tvMoveTo: { en: 'Move to…', tr: 'Taşı…' },
+  tvNoMoves: { en: 'No transitions available', tr: 'Uygun geçiş yok' },
+  tvMoved: { en: '{key} → {to}', tr: '{key} → {to}' },
+  tvDwellHint: {
+    en: 'Time in this column — grey after 1 day, amber after 3, red after 5',
+    tr: 'Bu kolonda geçen süre — 1 günden sonra gri, 3 günden sonra sarı, 5 günden sonra kırmızı'
+  },
+  tvStaleHint: {
+    en: 'Time since the last update — amber after 7 days, red after 14',
+    tr: 'Son güncellemeden bu yana geçen süre — 7 günden sonra sarı, 14 günden sonra kırmızı'
+  },
+  tvCopied: { en: 'Link copied', tr: 'Link kopyalandı' },
+
+  // integrations settings
+  tabIntegrations: { en: 'Integrations', tr: 'Entegrasyonlar' },
+  githubTitle: { en: 'GitHub', tr: 'GitHub' },
+  jiraTitle: { en: 'Jira', tr: 'Jira' },
+  ghHint: {
+    en: 'Used by the Dashboard to list your open PRs and the ones waiting on your review. Needs a token with the `repo` scope. It is encrypted with your OS keychain and never leaves this machine.',
+    tr: 'Dashboard’da açık PR’larını ve review beklediğin PR’ları listelemek için kullanılır. `repo` scope’lu bir token gerekir. İşletim sisteminin keychain’iyle şifrelenir, bu makineden çıkmaz.'
+  },
+  ghToken: { en: 'Personal access token', tr: 'Personal access token' },
+  ghTokenLink: { en: 'Create a token on GitHub', tr: 'GitHub’da token oluştur' },
+  ghConnected: { en: 'GitHub connected as {login}', tr: 'GitHub bağlandı: {login}' },
+  ghCleared: { en: 'GitHub token removed', tr: 'GitHub token’ı kaldırıldı' },
+  ghMissing: { en: 'A token is required', tr: 'Token gerekli' },
+  tvGhNotConfigured: {
+    en: 'GitHub is not connected — add a token in Settings › Integrations.',
+    tr: 'GitHub bağlı değil — Ayarlar › Entegrasyonlar’dan token ekle.'
+  },
+  jiraHint: {
+    en: 'Used by the Dashboard to list the issues assigned to you. The API token is encrypted with your OS keychain and never leaves this machine.',
+    tr: 'Dashboard’da sana atanmış işleri listelemek için kullanılır. API token işletim sisteminin keychain’iyle şifrelenir, bu makineden çıkmaz.'
+  },
+  jiraUrl: { en: 'Jira URL', tr: 'Jira URL' },
+  jiraEmail: { en: 'Email', tr: 'E-posta' },
+  jiraToken: { en: 'API token', tr: 'API token' },
+  jiraTokenPh: { en: 'paste your API token', tr: 'API token’ı yapıştır' },
+  jiraTokenStored: { en: '•••••••• (stored — leave blank to keep)', tr: '•••••••• (kayıtlı — boş bırakırsan korunur)' },
+  jiraTokenLink: { en: 'Create an API token', tr: 'API token oluştur' },
+  jiraSaveTest: { en: 'Save & test', tr: 'Kaydet & test et' },
+  jiraClear: { en: 'Remove', tr: 'Kaldır' },
+  jiraConnected: { en: 'Jira connected', tr: 'Jira bağlandı' },
+  jiraCleared: { en: 'Jira credentials removed', tr: 'Jira bilgileri kaldırıldı' },
+  jiraMissing: { en: 'URL, email and token are required', tr: 'URL, e-posta ve token gerekli' },
+  gcalTitle: { en: 'Google Calendar', tr: 'Google Calendar' },
+  gcalHint: {
+    en: 'Shows today’s meetings with a one-click Meet join. Needs an OAuth client (Desktop app) from your own Google Cloud project — read-only calendar access. The refresh token is encrypted with your OS keychain.',
+    tr: 'Bugünkü toplantılarını tek tıkla Meet’e katılma ile gösterir. Kendi Google Cloud projenden bir OAuth client (Desktop app) gerekir — takvime salt-okunur erişim. Refresh token işletim sisteminin keychain’iyle şifrelenir.'
+  },
+  gcalClientId: { en: 'Client ID', tr: 'Client ID' },
+  gcalClientSecret: { en: 'Client secret', tr: 'Client secret' },
+  gcalCredLink: { en: 'Create OAuth credentials', tr: 'OAuth bilgilerini oluştur' },
+  gcalConnect: { en: 'Connect Google', tr: 'Google’a bağlan' },
+  gcalWaiting: { en: 'Waiting for Google…', tr: 'Google bekleniyor…' },
+  gcalDisconnect: { en: 'Disconnect', tr: 'Bağlantıyı kes' },
+  gcalConnected: { en: 'Connected as {email}', tr: 'Bağlandı: {email}' },
+  gcalCleared: { en: 'Google disconnected', tr: 'Google bağlantısı kesildi' },
+  gcalMissing: { en: 'Client ID and secret are required', tr: 'Client ID ve secret gerekli' },
+  prefMeetingAlerts: { en: 'Meeting reminders', tr: 'Toplantı hatırlatması' },
+  prefMeetingAlertsHint: {
+    en: 'Desktop notification 5 minutes before a meeting starts, click to join.',
+    tr: 'Toplantı başlamadan 5 dakika önce masaüstü bildirimi, tıklayınca katıl.'
+  },
+  tvMeetings: { en: 'Today’s meetings', tr: 'Bugünkü toplantılar' },
+  tvNoMeetings: { en: 'Nothing left on the calendar today.', tr: 'Bugün takvimde kalan bir şey yok.' },
+  tvGcalNotConfigured: {
+    en: 'Google Calendar is not connected — set it up in Settings › Integrations.',
+    tr: 'Google Calendar bağlı değil — Ayarlar › Entegrasyonlar’dan kur.'
+  },
+  tvJoin: { en: 'Join', tr: 'Katıl' },
+  tvOpenSession: { en: 'Open session “{name}”', tr: '“{name}” session’ını aç' },
+  sessTicketPh: { en: '◫ link a ticket (MB-1234)', tr: '◫ ticket bağla (MB-1234)' },
+  sessTicketEdit: { en: 'Click to change the linked ticket', tr: 'Bağlı ticket’ı değiştirmek için tıkla' },
+  sessBadKey: { en: 'Not a valid issue key (e.g. MB-1234)', tr: 'Geçerli bir issue key değil (ör. MB-1234)' },
+  tvInstantMeet: { en: '+ Instant Meet', tr: '+ Anlık Meet' },
+  tvSchedule: { en: 'Schedule', tr: 'Planla' },
+  tvMeetCreated: { en: 'Meet link created and copied', tr: 'Meet linki oluşturuldu ve kopyalandı' },
+  tvMeetScheduled: { en: 'Meeting created', tr: 'Toplantı oluşturuldu' },
+  tvMeetTitle: { en: 'Title', tr: 'Başlık' },
+  tvMeetGuests: { en: 'guests (comma separated)', tr: 'katılımcılar (virgülle)' },
+  tvNeedTime: { en: 'Pick a start time', tr: 'Başlangıç saati seç' },
+  tvKindMeeting: { en: 'Meeting', tr: 'Toplantı' },
+  tvMeetStart: { en: 'Start', tr: 'Başlangıç' },
+  tvMeetMinutes: { en: 'Minutes', tr: 'Dakika' },
+  tvMeetNote: {
+    en: 'Creates a calendar event with a Meet link and invites the guests.',
+    tr: 'Meet linkli bir takvim etkinliği oluşturur ve katılımcılara davet gönderir.'
+  },
+  tvOooNote: {
+    en: 'Blocks the time as out of office. Existing invitations are not auto-declined.',
+    tr: 'Bu aralığı ofis dışı olarak bloklar. Mevcut davetler otomatik reddedilmez.'
+  },
+  tvKindOoo: { en: 'Out of office', tr: 'Ofis dışı' },
+  tvOoo: { en: 'out of office', tr: 'ofis dışı' },
+  tvOooCreated: { en: 'Out-of-office block created', tr: 'Ofis dışı bloğu oluşturuldu' },
+  tvNow: { en: 'now', tr: 'şimdi' },
+  tvLive: { en: 'in progress', tr: 'devam ediyor' },
+  tvAllDay: { en: 'all day', tr: 'tüm gün' },
+
   // sessions
   sessions: { en: 'Sessions', tr: 'Session’lar' },
   newSession: { en: 'New session', tr: 'Yeni session' },
@@ -76,8 +197,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   },
   prefConfirmDelete: { en: 'Confirm before delete', tr: 'Silmeden önce onay' },
   prefConfirmDeleteHint: {
-    en: 'Ask for confirmation before deleting a resource.',
-    tr: 'Bir kaynağı silmeden önce onay iste.'
+    en: 'Ask for confirmation before deleting a resource or a session.',
+    tr: 'Bir kaynağı veya session’ı silmeden önce onay iste.'
   },
   notifOnToast: { en: 'Notifications on', tr: 'Bildirimler açık' },
   favorites: { en: 'Favorites', tr: 'Favoriler' },

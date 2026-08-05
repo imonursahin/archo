@@ -14,6 +14,8 @@ export interface TerminalRec {
   claudeSessionId?: string // captured claude session for seamless --resume
   ranClaude?: boolean // claude was run here (even typed manually) → resume on restart
   bg?: string // custom terminal background color
+  tags?: string[]
+  jiraKey?: string // the ticket this terminal's work belongs to
 }
 
 export interface TermSession {
@@ -60,6 +62,37 @@ export async function listSessions(assistantId: string): Promise<TermSession[]> 
   return (await load())
     .filter((s) => s.assistantId === assistantId)
     .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+// Which TERMINAL is doing which ticket's work — across ALL assistants, because
+// the dashboard shows your whole sprint, not one assistant's slice of it. Bound
+// per terminal rather than per session: one session routinely holds several
+// terminals working on different tickets.
+export async function listJiraBindings(): Promise<
+  {
+    sessionId: string
+    assistantId: string
+    sessionName: string
+    terminalId: string
+    terminalName: string
+    jiraKey: string
+  }[]
+> {
+  const out: Awaited<ReturnType<typeof listJiraBindings>> = []
+  for (const s of await load()) {
+    for (const t of s.terminals) {
+      if (!t.jiraKey) continue
+      out.push({
+        sessionId: s.id,
+        assistantId: s.assistantId,
+        sessionName: s.name,
+        terminalId: t.id,
+        terminalName: t.name,
+        jiraKey: t.jiraKey
+      })
+    }
+  }
+  return out
 }
 
 export async function getSession(id: string): Promise<TermSession | null> {
@@ -247,6 +280,57 @@ export async function setTerminalBg(
   s.terminals = s.terminals.map((t) =>
     t.id === terminalId ? { ...t, bg: bg || undefined } : t
   )
+  await persist(list)
+}
+
+export async function setTerminalTags(
+  sessionId: string,
+  terminalId: string,
+  tags: string[]
+): Promise<void> {
+  const list = await load()
+  const s = list.find((x) => x.id === sessionId)
+  if (!s) return
+  s.terminals = s.terminals.map((t) =>
+    t.id === terminalId ? { ...t, tags: tags.length ? tags : undefined } : t
+  )
+  await persist(list)
+}
+
+// Apply a drag-and-drop tab order. Rebuilt from the stored terminals rather
+// than trusting the incoming list wholesale: a terminal the renderer didn't
+// know about (added from another view while the drag was in flight) or a
+// duplicated id must never drop a terminal from the session.
+export async function setTerminalJira(
+  sessionId: string,
+  terminalId: string,
+  jiraKey: string
+): Promise<void> {
+  const list = await load()
+  const s = list.find((x) => x.id === sessionId)
+  if (!s) return
+  s.terminals = s.terminals.map((t) =>
+    t.id === terminalId ? { ...t, jiraKey: jiraKey || undefined } : t
+  )
+  await persist(list)
+}
+
+export async function reorderTerminals(sessionId: string, orderedIds: string[]): Promise<void> {
+  const list = await load()
+  const s = list.find((x) => x.id === sessionId)
+  if (!s) return
+  const seen = new Set<string>()
+  const next: TerminalRec[] = []
+  for (const id of orderedIds) {
+    if (seen.has(id)) continue
+    const t = s.terminals.find((x) => x.id === id)
+    if (t) {
+      seen.add(id)
+      next.push(t)
+    }
+  }
+  for (const t of s.terminals) if (!seen.has(t.id)) next.push(t)
+  s.terminals = next
   await persist(list)
 }
 

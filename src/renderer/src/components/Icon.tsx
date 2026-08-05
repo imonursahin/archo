@@ -24,6 +24,7 @@ type Name =
   | 'pin'
   | 'sparkle'
   | 'chevron-down'
+  | 'copy'
 
 const PATHS: Record<Name, JSX.Element> = {
   usage: (
@@ -143,7 +144,13 @@ const PATHS: Record<Name, JSX.Element> = {
   sparkle: (
     <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
   ),
-  'chevron-down': <polyline points="6 9 12 15 18 9" />
+  'chevron-down': <polyline points="6 9 12 15 18 9" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  )
 }
 
 export default function Icon({

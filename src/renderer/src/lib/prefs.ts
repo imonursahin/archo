@@ -6,6 +6,7 @@ export interface Prefs {
   confirmDelete: boolean // silmeden önce onay iste
   notifyOnDone: boolean // uzun görev bitince masaüstü bildirimi
   notifyThreshold: number // kaç saniyeden uzun sürerse bildir
+  meetingAlerts: boolean // toplantıdan 5 dk önce masaüstü bildirimi
 }
 
 const DEFAULTS: Prefs = {
@@ -13,7 +14,8 @@ const DEFAULTS: Prefs = {
   usageAlerts: true,
   confirmDelete: true,
   notifyOnDone: true,
-  notifyThreshold: 20
+  notifyThreshold: 20,
+  meetingAlerts: true
 }
 
 const KEY = 'prefs'

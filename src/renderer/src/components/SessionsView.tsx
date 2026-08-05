@@ -7,7 +7,13 @@ import { bus, type OpenTermRequest } from '../lib/bus'
 import SessionTools from './SessionTools'
 import Icon from './Icon'
 import { t, ti, getLang } from '../lib/i18n'
-import type { Assistant, TermSession, TerminalRec } from '../global'
+import { getPrefs } from '../lib/prefs'
+import { toast } from '../lib/toast'
+import type { Assistant, TermSession, TerminalRec, JiraItem } from '../global'
+
+// inside the terminal-tab map the loop variable is named `t`, which shadows the
+// translator — use this alias there
+const tx = t
 
 // URL + file:line matchers for terminal smart links
 const URL_RE = /https?:\/\/[^\s"'`)]+/g
@@ -67,6 +73,22 @@ function pickClaudeId(
 // absorbs it, at the cost of a few columns of width.
 function ptyCols(cols: number): number {
   return Math.max(20, cols - 3)
+}
+
+// Which terminal you were last on, per session. Pure UI state, so it lives in
+// localStorage rather than the session store — no disk write on every tab click.
+const LAST_TERM_KEY = 'lastTerminalBySession'
+function lastTermMap(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_TERM_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+function rememberTerm(sessionId: string, terminalId: string): void {
+  const m = lastTermMap()
+  m[sessionId] = terminalId
+  localStorage.setItem(LAST_TERM_KEY, JSON.stringify(m))
 }
 
 function relTime(ms: number): string {
@@ -532,6 +554,44 @@ export default function SessionsView({
   const [sessQuery, setSessQuery] = useState('')
   const [splitId, setSplitId] = useState<string | null>(null) // second pane for split view
   const [tagInput, setTagInput] = useState('')
+  const [termTagInput, setTermTagInput] = useState('')
+  const [dragTab, setDragTab] = useState<string | null>(null) // tab being dragged
+  const [dropTab, setDropTab] = useState<string | null>(null) // tab it would land on
+
+  // ---- terminal tabs: drag to reorder ----
+  function moveTerminal(fromId: string, toId: string): void {
+    if (!open || fromId === toId) return
+    const list = [...open.terminals]
+    const from = list.findIndex((t) => t.id === fromId)
+    const to = list.findIndex((t) => t.id === toId)
+    if (from < 0 || to < 0) return
+    const [moved] = list.splice(from, 1)
+    list.splice(to, 0, moved)
+    setOpen({ ...open, terminals: list })
+    window.api.reorderTerminals(
+      open.id,
+      list.map((t) => t.id)
+    )
+  }
+
+  // ---- terminal tags ----
+  async function saveTermTags(terminalId: string, tags: string[]): Promise<void> {
+    if (!open) return
+    setOpen({
+      ...open,
+      terminals: open.terminals.map((x) =>
+        x.id === terminalId ? { ...x, tags: tags.length ? tags : undefined } : x
+      )
+    })
+    await window.api.setTerminalTags(open.id, terminalId, tags)
+  }
+  function addTermTag(terminalId: string): void {
+    const v = termTagInput.trim().replace(/^#/, '')
+    setTermTagInput('')
+    if (!v || !open) return
+    const tags = open.terminals.find((x) => x.id === terminalId)?.tags || []
+    if (!tags.includes(v)) saveTermTags(terminalId, [...tags, v])
+  }
 
   async function saveTags(tags: string[]): Promise<void> {
     if (!open) return
@@ -539,6 +599,38 @@ export default function SessionsView({
     await window.api.updateSessionMeta(open.id, { tags })
     reload()
   }
+  // ---- ticket binding (per terminal) ----
+  // Status is fetched live rather than stored: a stale "In Progress" on a ticket
+  // someone already moved is worse than showing nothing.
+  const [tickets, setTickets] = useState<Record<string, JiraItem>>({})
+
+  useEffect(() => {
+    setTickets({})
+    for (const trm of open?.terminals || []) {
+      if (!trm.jiraKey) continue
+      const key = trm.jiraKey
+      window.api.jiraIssue(key).then((r) => {
+        if (r.issue) setTickets((m) => ({ ...m, [key]: r.issue as JiraItem }))
+      })
+    }
+  }, [open?.id, (open?.terminals || []).map((x) => x.jiraKey).join(',')])
+
+  async function saveTerminalTicket(terminalId: string, raw: string): Promise<void> {
+    if (!open) return
+    const key = raw.trim().toUpperCase()
+    if (key && !/^[A-Z][A-Z0-9]*-\d+$/.test(key)) {
+      toast(t('sessBadKey'), 'error')
+      return
+    }
+    setOpen({
+      ...open,
+      terminals: open.terminals.map((x) =>
+        x.id === terminalId ? { ...x, jiraKey: key || undefined } : x
+      )
+    })
+    await window.api.setTerminalJira(open.id, terminalId, key)
+  }
+
   function addTag(): void {
     const v = tagInput.trim().replace(/^#/, '')
     if (!v || !open) return
@@ -615,6 +707,7 @@ export default function SessionsView({
 
   // report the currently-focused terminal up (App suppresses its notification)
   useEffect(() => {
+    if (open && active) rememberTerm(open.id, active)
     onActiveTerminal?.(open ? active : null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, open])
@@ -643,9 +736,12 @@ export default function SessionsView({
     )
     setLogPaths((p) => ({ ...p, ...Object.fromEntries(entries) }))
     setOpen(full)
-    // focus the requested terminal (from a notification click), else the FIRST one
+    // an explicit target (notification / dashboard) wins; otherwise return to
+    // whichever terminal you were last on in this session, not always the first
     const wanted = focusTermId && full.terminals.some((t) => t.id === focusTermId) ? focusTermId : null
-    setActive(wanted ?? full.terminals[0]?.id ?? null)
+    const remembered = lastTermMap()[full.id]
+    const restored = full.terminals.some((t) => t.id === remembered) ? remembered : null
+    setActive(wanted ?? restored ?? full.terminals[0]?.id ?? null)
   }
 
   // notification click → open the requested session + focus its terminal once loaded
@@ -754,7 +850,7 @@ export default function SessionsView({
   }
 
   async function deleteSession(id: string): Promise<void> {
-    if (!confirm(t('confirmDeleteSession'))) return
+    if (getPrefs().confirmDelete && !confirm(t('confirmDeleteSession'))) return
     // kill this session's live terminals and clear the detail pane if it's open
     const target = sessions.find((s) => s.id === id)
     target?.terminals.forEach((t) => {
@@ -831,6 +927,12 @@ export default function SessionsView({
                   <div className="ss-item-meta">
                     {ti('nTerminal', { n: s.terminals.length })} · {relTime(s.createdAt)}
                   </div>
+                  {(() => {
+                    const keys = [...new Set(s.terminals.map((x) => x.jiraKey).filter(Boolean))]
+                    return keys.length ? (
+                      <div className="ss-item-key">◫ {keys.join(' · ')}</div>
+                    ) : null
+                  })()}
                   {s.tags && s.tags.length > 0 && (
                     <div className="ss-item-tags">
                       {s.tags.map((tag) => (
@@ -945,11 +1047,40 @@ export default function SessionsView({
               {open.terminals.map((t) => (
                 <div
                   key={t.id}
-                  className={`term-tab ${active === t.id ? 'active' : ''} ${t.bg ? 'tinted' : ''}`}
+                  className={`term-tab ${active === t.id ? 'active' : ''} ${t.bg ? 'tinted' : ''} ${
+                    dragTab === t.id ? 'dragging' : ''
+                  } ${dropTab === t.id && dragTab !== t.id ? 'dropzone' : ''}`}
                   style={t.bg ? { background: t.bg, color: '#f0f0f2' } : undefined}
+                  // not while renaming — a draggable ancestor swallows the
+                  // click-drag that selects text inside the rename input
+                  draggable={editingTab !== t.id}
+                  onDragStart={(e) => {
+                    setDragTab(t.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                    // custom type on purpose: the terminal body only accepts
+                    // 'Files' drops, so a tab dragged over it is ignored
+                    e.dataTransfer.setData('application/x-archo-tab', t.id)
+                  }}
+                  onDragOver={(e) => {
+                    if (!dragTab) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    setDropTab(t.id)
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (dragTab) moveTerminal(dragTab, t.id)
+                    setDragTab(null)
+                    setDropTab(null)
+                  }}
+                  onDragEnd={() => {
+                    setDragTab(null)
+                    setDropTab(null)
+                  }}
                   onClick={() => setActive(t.id)}
                   onDoubleClick={(e) => {
                     setEditingTab(t.id)
+                    setTermTagInput('')
                     setTabRect(e.currentTarget.getBoundingClientRect())
                   }}
                 >
@@ -967,21 +1098,36 @@ export default function SessionsView({
                             x.id === t.id ? { ...x, name: v } : x
                           )
                         })
-                        setEditingTab(null)
+                        // moving focus into the popover (e.g. the tag input) is
+                        // still "editing this tab" — only an outside click closes
+                        if (!(e.relatedTarget as HTMLElement | null)?.closest?.('.tab-pop')) {
+                          setEditingTab(null)
+                        }
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
                       }}
                     />
                   ) : (
-                    <span>{t.name}</span>
+                    <span className="term-tab-name">{t.name}</span>
+                  )}
+                  {t.jiraKey && <span className="term-tab-key">{t.jiraKey}</span>}
+                  {t.tags && t.tags.length > 0 && (
+                    <span className="term-tab-tags">
+                      {t.tags.map((tag) => (
+                        <span key={tag} className="si-tag mini">
+                          #{tag}
+                        </span>
+                      ))}
+                    </span>
                   )}
                   {editingTab === t.id && tabRect && (
                     <div
-                      className="tab-colors"
-                      onMouseDown={(e) => e.preventDefault()}
+                      className="tab-pop"
+                      onClick={(e) => e.stopPropagation()}
                       style={{ position: 'fixed', top: tabRect.bottom + 3, left: tabRect.left }}
                     >
+                    <div className="tab-colors inline" onMouseDown={(e) => e.preventDefault()}>
                       {TAB_BGS.map((c) => (
                         <button
                           key={c || 'default'}
@@ -1000,6 +1146,68 @@ export default function SessionsView({
                           }}
                         />
                       ))}
+                    </div>
+                      <div className="tab-pop-ticket">
+                        <input
+                          className="si-tag-input key"
+                          placeholder={tx('sessTicketPh')}
+                          defaultValue={t.jiraKey || ''}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                          }}
+                          onBlur={(e) => {
+                            saveTerminalTicket(t.id, e.target.value)
+                            if (!(e.relatedTarget as HTMLElement | null)?.closest?.('.tab-pop')) {
+                              setEditingTab(null)
+                            }
+                          }}
+                        />
+                        {t.jiraKey && tickets[t.jiraKey] && (
+                          <span
+                            className={`si-key-status cat-${tickets[t.jiraKey].statusCategory}`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => window.api.openExternal(tickets[t.jiraKey!].url)}
+                            title={tickets[t.jiraKey].summary}
+                          >
+                            {tickets[t.jiraKey].status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="si-tags tab-pop-tags">
+                        {(t.tags || []).map((tag) => (
+                          <span key={tag} className="si-tag">
+                            #{tag}
+                            <span
+                              className="si-tag-x"
+                              title={tx('removeTag')}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() =>
+                                saveTermTags(t.id, (t.tags || []).filter((x) => x !== tag))
+                              }
+                            >
+                              ×
+                            </span>
+                          </span>
+                        ))}
+                        <input
+                          className="si-tag-input"
+                          placeholder={tx('tagPlaceholder')}
+                          value={termTagInput}
+                          onChange={(e) => setTermTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault()
+                              addTermTag(t.id)
+                            }
+                          }}
+                          onBlur={(e) => {
+                            addTermTag(t.id)
+                            if (!(e.relatedTarget as HTMLElement | null)?.closest?.('.tab-pop')) {
+                              setEditingTab(null)
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
                   <span

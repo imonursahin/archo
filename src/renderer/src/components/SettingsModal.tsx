@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getLang, setLang, t, type Lang } from '../lib/i18n'
+import { getLang, setLang, t, ti, type Lang } from '../lib/i18n'
 import { getTheme, applyTheme, type Theme } from '../lib/theme'
 import { getPrefs, setPref, type Prefs } from '../lib/prefs'
 import { toast } from '../lib/toast'
@@ -9,7 +9,7 @@ interface Props {
   onChange: () => void // re-render the app in place (no reload)
 }
 
-type Tab = 'general' | 'prefs'
+type Tab = 'general' | 'prefs' | 'integrations'
 
 export default function SettingsModal({ onClose, onChange }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>('general')
@@ -49,7 +49,21 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
           <button className={tab === 'prefs' ? 'active' : ''} onClick={() => setTab('prefs')}>
             {t('tabCustomize')}
           </button>
+          <button
+            className={tab === 'integrations' ? 'active' : ''}
+            onClick={() => setTab('integrations')}
+          >
+            {t('tabIntegrations')}
+          </button>
         </div>
+
+        {tab === 'integrations' && (
+          <div className="integrations">
+            <GithubSettings />
+            <JiraSettings />
+            <GoogleSettings />
+          </div>
+        )}
 
         {tab === 'general' && (
           <>
@@ -135,6 +149,16 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
               title={t('prefNotifyDone')}
               hint={t('prefNotifyDoneHint')}
             />
+            <Toggle
+              on={prefs.meetingAlerts}
+              onClick={() => {
+                togglePref('meetingAlerts')
+                // main owns the timer, so it has to hear about the change
+                window.api.setMeetingAlerts(!prefs.meetingAlerts)
+              }}
+              title={t('prefMeetingAlerts')}
+              hint={t('prefMeetingAlertsHint')}
+            />
             <button
               className="pref-test"
               onClick={async () => {
@@ -147,11 +171,298 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
           </div>
         )}
 
-        <div className="modal-foot">
-          <button className="btn primary" onClick={onClose}>
-            {t('save')}
+        {/* integrations save themselves via "Save & test" — a second Save
+            button there would only be a disguised close */}
+        {tab !== 'integrations' && (
+          <div className="modal-foot">
+            <button className="btn primary" onClick={onClose}>
+              {t('save')}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// GitHub credentials for the Tools tab. A personal access token rather than the
+// `gh` CLI — Archo can't assume gh is installed and logged in on every machine.
+// Same write-only handling as Jira: the token goes out, never comes back.
+function GithubSettings(): JSX.Element {
+  const [token, setToken] = useState('')
+  const [login, setLogin] = useState('')
+  const [hasToken, setHasToken] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    window.api.getGithubConfig().then((c) => {
+      setHasToken(c.hasToken)
+      setLogin(c.login)
+    })
+  }, [])
+
+  async function save(): Promise<void> {
+    if (!token.trim()) {
+      toast(t('ghMissing'), 'error')
+      return
+    }
+    setBusy(true)
+    const r = await window.api.setGithubConfig({ token: token.trim() })
+    setBusy(false)
+    if (!r.ok) {
+      toast(r.error || t('errNotSaved'), 'error')
+      return
+    }
+    setToken('')
+    setHasToken(true)
+    setLogin(r.login || '')
+    toast(ti('ghConnected', { login: r.login || '' }), 'success')
+  }
+
+  async function clear(): Promise<void> {
+    await window.api.clearGithubConfig()
+    setToken('')
+    setLogin('')
+    setHasToken(false)
+    toast(t('ghCleared'), 'info')
+  }
+
+  return (
+    <div className="jira-settings">
+      <div className="int-title">
+        ⑂ {t('githubTitle')}
+        {hasToken && login && <span className="int-badge">@{login}</span>}
+      </div>
+      <p className="jira-hint">{t('ghHint')}</p>
+      <label className="jira-field">
+        <span>{t('ghToken')}</span>
+        <input
+          type="password"
+          placeholder={hasToken ? t('jiraTokenStored') : 'ghp_…'}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+      </label>
+      <a
+        className="jira-link"
+        onClick={() => window.api.openExternal('https://github.com/settings/tokens')}
+      >
+        {t('ghTokenLink')} ↗
+      </a>
+      <div className="jira-actions">
+        <button className="btn primary" onClick={save} disabled={busy}>
+          {busy ? t('tvLoading') : t('jiraSaveTest')}
+        </button>
+        {hasToken && (
+          <button className="btn" onClick={clear}>
+            {t('jiraClear')}
           </button>
-        </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Jira credentials for the Tools tab. The API token is write-only from here:
+// it goes to the main process, gets encrypted with the OS keychain and is never
+// read back — the UI only ever learns whether one is stored.
+function JiraSettings(): JSX.Element {
+  const [baseUrl, setBaseUrl] = useState('')
+  const [email, setEmail] = useState('')
+  const [token, setToken] = useState('')
+  const [hasToken, setHasToken] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    window.api.getJiraConfig().then((c) => {
+      setBaseUrl(c.baseUrl)
+      setEmail(c.email)
+      setHasToken(c.hasToken)
+    })
+  }, [])
+
+  async function save(): Promise<void> {
+    if (!baseUrl.trim() || !email.trim() || (!hasToken && !token.trim())) {
+      toast(t('jiraMissing'), 'error')
+      return
+    }
+    setBusy(true)
+    const r = await window.api.setJiraConfig({
+      baseUrl,
+      email,
+      token: token.trim() || undefined
+    })
+    if (!r.ok) {
+      setBusy(false)
+      toast(r.error || t('errNotSaved'), 'error')
+      return
+    }
+    setToken('')
+    setHasToken(true)
+    // prove the credentials actually work instead of just claiming "saved"
+    const check = await window.api.jiraTools()
+    setBusy(false)
+    if (check.error && check.error !== 'not-configured') toast(check.error, 'error')
+    else toast(t('jiraConnected'), 'success')
+  }
+
+  async function clear(): Promise<void> {
+    await window.api.clearJiraConfig()
+    setBaseUrl('')
+    setEmail('')
+    setToken('')
+    setHasToken(false)
+    toast(t('jiraCleared'), 'info')
+  }
+
+  return (
+    <div className="jira-settings">
+      <div className="int-title">
+        ◫ {t('jiraTitle')}
+        {hasToken && baseUrl && (
+          <span className="int-badge">{baseUrl.replace(/^https?:\/\//, '')}</span>
+        )}
+      </div>
+      <p className="jira-hint">{t('jiraHint')}</p>
+      <label className="jira-field">
+        <span>{t('jiraUrl')}</span>
+        <input
+          placeholder="https://your-company.atlassian.net"
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+        />
+      </label>
+      <label className="jira-field">
+        <span>{t('jiraEmail')}</span>
+        <input
+          placeholder="you@company.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </label>
+      <label className="jira-field">
+        <span>{t('jiraToken')}</span>
+        <input
+          type="password"
+          placeholder={hasToken ? t('jiraTokenStored') : t('jiraTokenPh')}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+      </label>
+      <a
+        className="jira-link"
+        onClick={() =>
+          window.api.openExternal('https://id.atlassian.com/manage-profile/security/api-tokens')
+        }
+      >
+        {t('jiraTokenLink')} ↗
+      </a>
+      <div className="jira-actions">
+        <button className="btn primary" onClick={save} disabled={busy}>
+          {busy ? t('tvLoading') : t('jiraSaveTest')}
+        </button>
+        {hasToken && (
+          <button className="btn" onClick={clear}>
+            {t('jiraClear')}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Google Calendar. Unlike GitHub/Jira there is no paste-a-token path — this
+// runs a real OAuth consent flow in the browser, so the button blocks until
+// Google redirects back and we can report what actually happened.
+function GoogleSettings(): JSX.Element {
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
+  const [connected, setConnected] = useState(false)
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    window.api.getGoogleConfig().then((c) => {
+      setConnected(c.connected)
+      setEmail(c.email)
+    })
+  }, [])
+
+  async function connect(): Promise<void> {
+    if (!clientId.trim() || !clientSecret.trim()) {
+      toast(t('gcalMissing'), 'error')
+      return
+    }
+    setBusy(true)
+    const r = await window.api.connectGoogle({ clientId, clientSecret })
+    setBusy(false)
+    if (!r.ok) {
+      toast(r.error || t('errNotSaved'), 'error')
+      return
+    }
+    setClientId('')
+    setClientSecret('')
+    setConnected(true)
+    setEmail(r.email || '')
+    // the alert watcher can only start once there are credentials to poll with
+    window.api.setMeetingAlerts(getPrefs().meetingAlerts)
+    toast(ti('gcalConnected', { email: r.email || '' }), 'success')
+  }
+
+  async function disconnect(): Promise<void> {
+    await window.api.clearGoogleConfig()
+    window.api.setMeetingAlerts(false)
+    setConnected(false)
+    setEmail('')
+    toast(t('gcalCleared'), 'info')
+  }
+
+  return (
+    <div className="jira-settings">
+      <div className="int-title">
+        ▦ {t('gcalTitle')}
+        {connected && email && <span className="int-badge">{email}</span>}
+      </div>
+      <p className="jira-hint">{t('gcalHint')}</p>
+      {!connected && (
+        <>
+          <label className="jira-field">
+            <span>{t('gcalClientId')}</span>
+            <input
+              placeholder="…apps.googleusercontent.com"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+          </label>
+          <label className="jira-field">
+            <span>{t('gcalClientSecret')}</span>
+            <input
+              type="password"
+              placeholder="GOCSPX-…"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+            />
+          </label>
+          <a
+            className="jira-link"
+            onClick={() =>
+              window.api.openExternal('https://console.cloud.google.com/apis/credentials')
+            }
+          >
+            {t('gcalCredLink')} ↗
+          </a>
+        </>
+      )}
+      <div className="jira-actions">
+        {!connected ? (
+          <button className="btn primary" onClick={connect} disabled={busy}>
+            {busy ? t('gcalWaiting') : t('gcalConnect')}
+          </button>
+        ) : (
+          <button className="btn" onClick={disconnect}>
+            {t('gcalDisconnect')}
+          </button>
+        )}
       </div>
     </div>
   )

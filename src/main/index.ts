@@ -211,6 +211,30 @@ import {
   detectClaudeSessions
 } from './claude'
 import {
+  setToolsPaths,
+  githubTools,
+  jiraTools,
+  jiraIssue,
+  jiraTransitions,
+  jiraTransition,
+  getJiraConfig,
+  setJiraConfig,
+  clearJiraConfig,
+  getGithubConfig,
+  setGithubConfig,
+  clearGithubConfig
+} from './tools'
+import {
+  setGooglePath,
+  getGoogleConfig,
+  connectGoogle,
+  clearGoogleConfig,
+  meetingsToday,
+  setMeetingAlerts,
+  createMeetSpace,
+  createMeetingEvent
+} from './google'
+import {
   setPaths as setSessionPaths,
   listSessions as listTermSessions,
   getSession,
@@ -227,9 +251,13 @@ import {
   setTerminalClaude,
   markTerminalRanClaude,
   setTerminalBg,
+  setTerminalTags,
+  setTerminalJira,
+  reorderTerminals,
   deleteSessionsForAssistant,
   readTerminalLog,
-  logPathFor
+  logPathFor,
+  listJiraBindings
 } from './sessions'
 import { gitStatus, gitRevertFile, gitCheckpoint, gitRestoreCheckpoint, gitBranch } from './git'
 import { createTerm, writeTerm, resizeTerm, killTerm, killAll, isLive, snapshot } from './pty'
@@ -554,7 +582,18 @@ function registerIpc(): void {
   handle('termsession:rename', (id: string, name: string) => renameSession(id, name))
   handle(
     'termsession:meta',
-    (id: string, patch: { note?: string; tags?: string[]; pinned?: boolean; bg?: string }) =>
+    (
+      id: string,
+      patch: {
+        note?: string
+        tags?: string[]
+        pinned?: boolean
+        bg?: string
+        cwd?: string
+        model?: string
+        effort?: string
+      }
+    ) =>
       updateSessionMeta(id, patch)
   )
   handle('termsession:delete', (id: string) => deleteSession(id))
@@ -585,6 +624,45 @@ function registerIpc(): void {
   )
   handle('terminal:setbg', (sessionId: string, terminalId: string, bg: string) =>
     setTerminalBg(sessionId, terminalId, bg)
+  )
+  // ---- Tools dashboard (GitHub PRs + Jira issues) ----
+  handle('tools:github', () => githubTools())
+  handle('tools:jira', () => jiraTools())
+  handle('tools:meetings', () => meetingsToday())
+  handle('jira:issue', (key: string) => jiraIssue(key))
+  handle('sessions:jiraBindings', () => listJiraBindings())
+  handle('google:getConfig', () => getGoogleConfig())
+  handle('google:connect', (input: { clientId: string; clientSecret: string }) =>
+    connectGoogle(input)
+  )
+  handle('google:clearConfig', () => clearGoogleConfig())
+  handle('meetings:setAlerts', (on: boolean) => setMeetingAlerts(on))
+  handle('meet:createSpace', () => createMeetSpace())
+  handle('meet:createEvent', (input: {
+    title: string
+    startISO: string
+    minutes: number
+    guests: string[]
+    kind?: 'meeting' | 'ooo'
+  }) => createMeetingEvent(input))
+  handle('jira:transitions', (key: string) => jiraTransitions(key))
+  handle('jira:transition', (key: string, id: string) => jiraTransition(key, id))
+  handle('jira:getConfig', () => getJiraConfig())
+  handle('jira:setConfig', (input: { baseUrl: string; email: string; token?: string }) =>
+    setJiraConfig(input)
+  )
+  handle('jira:clearConfig', () => clearJiraConfig())
+  handle('github:getConfig', () => getGithubConfig())
+  handle('github:setConfig', (input: { token: string }) => setGithubConfig(input))
+  handle('github:clearConfig', () => clearGithubConfig())
+  handle('terminal:setjira', (sessionId: string, terminalId: string, key: string) =>
+    setTerminalJira(sessionId, terminalId, key)
+  )
+  handle('terminal:settags', (sessionId: string, terminalId: string, tags: string[]) =>
+    setTerminalTags(sessionId, terminalId, tags)
+  )
+  handle('terminal:reorder', (sessionId: string, orderedIds: string[]) =>
+    reorderTerminals(sessionId, orderedIds)
   )
   handle('terminal:setclaude', (sessionId: string, terminalId: string, claudeId: string) =>
     setTerminalClaude(sessionId, terminalId, claudeId)
@@ -620,6 +698,8 @@ app.whenReady().then(() => {
     path.join(app.getPath('userData'), 'terminal-sessions.json'),
     path.join(app.getPath('userData'), 'session-logs')
   )
+  setToolsPaths(app.getPath('userData'))
+  setGooglePath(app.getPath('userData'))
   registerIpc()
   createWindow()
   app.on('activate', () => {

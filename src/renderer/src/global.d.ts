@@ -1,5 +1,14 @@
 export interface ResourceItem {
-  kind: 'skill' | 'agent' | 'command' | 'mcp' | 'instruction' | 'plugin' | 'settings' | 'hook'
+  kind:
+    | 'skill'
+    | 'agent'
+    | 'command'
+    | 'mcp'
+    | 'instruction'
+    | 'plugin'
+    | 'settings'
+    | 'hook'
+    | 'memory'
   name: string
   path: string | null
   description?: string
@@ -19,6 +28,7 @@ export interface ResourceGroups {
   commands: ResourceItem[]
   mcp: ResourceItem[]
   instructions: ResourceItem[]
+  memories: ResourceItem[]
   hooks: ResourceItem[]
   settings: ResourceItem[]
   plugins: ResourceItem[]
@@ -54,6 +64,8 @@ export interface TerminalRec {
   claudeSessionId?: string
   ranClaude?: boolean // claude was run in this terminal (even if typed manually)
   bg?: string // custom terminal background color
+  tags?: string[]
+  jiraKey?: string
 }
 
 export interface TermSession {
@@ -70,6 +82,57 @@ export interface TermSession {
   checkpoints?: { sha: string; message: string; time: number }[]
   model?: string
   effort?: string
+}
+
+export interface JiraBinding {
+  sessionId: string
+  assistantId: string
+  sessionName: string
+  terminalId: string
+  terminalName: string
+  jiraKey: string
+}
+
+export interface PrItem {
+  id: string
+  number: number
+  title: string
+  repo: string
+  url: string
+  author?: string
+  isDraft: boolean
+  updatedAt: string
+}
+
+export interface JiraItem {
+  key: string
+  summary: string
+  status: string
+  statusCategory: string
+  type: string
+  priority?: string
+  project: string
+  url: string
+  updated: string
+  statusChanged: string
+}
+
+export interface JiraTransition {
+  id: string
+  name: string
+  to: string
+  toCategory: string
+}
+
+export interface MeetingItem {
+  id: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  meetUrl?: string
+  htmlLink: string
+  eventType: string
 }
 
 export interface GitFile {
@@ -290,6 +353,43 @@ export interface StudioApi {
   setTerminalClaude(sessionId: string, terminalId: string, claudeId: string): Promise<void>
   markTerminalRanClaude(sessionId: string, terminalId: string): Promise<void>
   setTerminalBg(sessionId: string, terminalId: string, bg: string): Promise<void>
+  setTerminalTags(sessionId: string, terminalId: string, tags: string[]): Promise<void>
+  setTerminalJira(sessionId: string, terminalId: string, key: string): Promise<void>
+  reorderTerminals(sessionId: string, orderedIds: string[]): Promise<void>
+  githubTools(): Promise<{ mine: PrItem[]; reviews: PrItem[]; error?: string }>
+  jiraTools(): Promise<{ issues: JiraItem[]; error?: string }>
+  meetingsToday(): Promise<{ meetings: MeetingItem[]; error?: string }>
+  jiraIssue(key: string): Promise<{ issue?: JiraItem; error?: string }>
+  sessionJiraBindings(): Promise<JiraBinding[]>
+  getGoogleConfig(): Promise<{ hasClient: boolean; connected: boolean; email: string }>
+  connectGoogle(input: {
+    clientId: string
+    clientSecret: string
+  }): Promise<{ ok: boolean; email?: string; error?: string }>
+  clearGoogleConfig(): Promise<void>
+  setMeetingAlerts(on: boolean): Promise<void>
+  createMeetSpace(): Promise<{ url?: string; error?: string }>
+  createMeetingEvent(input: {
+    title: string
+    startISO: string
+    minutes: number
+    guests: string[]
+    kind?: 'meeting' | 'ooo'
+  }): Promise<{ url?: string; htmlLink?: string; error?: string }>
+  jiraTransitions(key: string): Promise<{ transitions: JiraTransition[]; error?: string }>
+  jiraTransition(key: string, id: string): Promise<{ ok: boolean; error?: string }>
+  getJiraConfig(): Promise<{ baseUrl: string; email: string; hasToken: boolean }>
+  setJiraConfig(input: {
+    baseUrl: string
+    email: string
+    token?: string
+  }): Promise<{ ok: boolean; error?: string }>
+  clearJiraConfig(): Promise<void>
+  getGithubConfig(): Promise<{ hasToken: boolean; login: string }>
+  setGithubConfig(input: {
+    token: string
+  }): Promise<{ ok: boolean; login?: string; error?: string }>
+  clearGithubConfig(): Promise<void>
   listSessions(): Promise<SessionMeta[]>
   readSession(file: string): Promise<SessionMessage[]>
   searchTranscripts(query: string, scope?: string[]): Promise<TranscriptHit[]>

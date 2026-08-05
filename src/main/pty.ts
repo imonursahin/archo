@@ -151,6 +151,15 @@ function cleanEnv(): Record<string, string> {
   // input-row shading (it already asks our OSC 11 for the bg color to shade
   // against; it just needs the capability signal to actually use it).
   env.COLORTERM = 'truecolor'
+  // Same Finder/GUI launch story for the locale: no LANG/LC_* is inherited, so
+  // the shell falls back to the C locale and treats every byte as latin-1.
+  // Non-ASCII then breaks end to end — zsh's line editor echoes typed Turkish
+  // characters as mojibake, `ls` masks them as `??????`, and whatever you
+  // select and copy out of the terminal carries that corruption to wherever
+  // you paste it. Terminal.app/iTerm set this themselves; we have to as well.
+  // Only when nothing was inherited — an explicitly set LANG/LC_* is the
+  // user's own choice and stays untouched.
+  if (!env.LC_ALL && !env.LC_CTYPE && !env.LANG) env.LANG = 'en_US.UTF-8'
   // We spawn an interactive (not login) shell for speed, so login-only PATH
   // entries (e.g. Homebrew from .zprofile) may be missing when the app is
   // launched from Finder. Guarantee a sane PATH floor so brew/claude resolve.

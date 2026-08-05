@@ -24,13 +24,14 @@ interface Props {
 }
 
 // which kinds can be deleted from the sidebar
-const DELETABLE = new Set(['skill', 'agent', 'command', 'mcp'])
+const DELETABLE = new Set(['skill', 'agent', 'command', 'mcp', 'memory'])
 
 const GROUP_DEFS: { key: keyof ResourceGroups; label: string; tag: string }[] = [
   { key: 'instructions', label: 'Instructions', tag: 'md' },
   { key: 'skills', label: 'Skills', tag: 'md' },
   { key: 'agents', label: 'Agents', tag: 'md' },
   { key: 'commands', label: 'Commands', tag: 'md' },
+  { key: 'memories', label: 'Memory', tag: '🧠' },
   { key: 'mcp', label: 'MCP Servers', tag: '⚡' },
   { key: 'plugins', label: 'Plugins', tag: '🧩' },
   { key: 'hooks', label: 'Hooks', tag: '⚓' },
@@ -134,6 +135,7 @@ export default function Sidebar({
     agent: 'md',
     command: 'md',
     instruction: 'md',
+    memory: '🧠',
     mcp: '⚡',
     plugin: '🧩',
     hook: '⚓',

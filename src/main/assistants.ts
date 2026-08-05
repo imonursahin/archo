@@ -21,7 +21,16 @@ export interface Assistant {
 }
 
 export interface ResourceItem {
-  kind: 'skill' | 'agent' | 'command' | 'mcp' | 'instruction' | 'plugin' | 'settings' | 'hook'
+  kind:
+    | 'skill'
+    | 'agent'
+    | 'command'
+    | 'mcp'
+    | 'instruction'
+    | 'plugin'
+    | 'settings'
+    | 'hook'
+    | 'memory'
   name: string
   path: string | null
   description?: string
@@ -532,6 +541,32 @@ async function collectInstruction(baseDir: string, e: EngineDef): Promise<Resour
   return [{ kind: 'instruction', name: e.instructionFile, path: file }]
 }
 
+// Claude Code's persistent file memory. It does NOT live in the assistant
+// folder — it's keyed by the project cwd under ~/.claude/projects/<slug>/memory,
+// same slug scheme the transcript lookups already use. MEMORY.md is the index
+// Claude loads every session, so it's pinned to the top of the list.
+async function collectMemories(baseDir: string, e: EngineDef): Promise<ResourceItem[]> {
+  if (e.id !== 'claude') return []
+  const dir = path.join(HOME, '.claude', 'projects', baseDir.replace(/[/.]/g, '-'), 'memory')
+  const items: ResourceItem[] = []
+  for (const entry of await safeReadDir(dir)) {
+    if (!entry.endsWith('.md')) continue
+    const file = path.join(dir, entry)
+    const { data } = parseFrontmatter(await fs.readFile(file, 'utf8').catch(() => ''))
+    items.push({
+      kind: 'memory',
+      name: data.name || entry.replace(/\.md$/, ''),
+      path: file,
+      description: data.description || (entry === 'MEMORY.md' ? 'index' : undefined)
+    })
+  }
+  return items.sort((a, b) => {
+    const ia = a.path?.endsWith('/MEMORY.md') ? 0 : 1
+    const ib = b.path?.endsWith('/MEMORY.md') ? 0 : 1
+    return ia - ib || a.name.localeCompare(b.name)
+  })
+}
+
 async function collectHooks(baseDir: string, e: EngineDef): Promise<ResourceItem[]> {
   if (!e.settingsFile) return []
   const dir = path.dirname(path.join(baseDir, e.settingsFile))
@@ -580,23 +615,25 @@ export async function getResources(id: string) {
       commands: [],
       mcp: [],
       instructions: [],
+      memories: [],
       hooks: [],
       settings: [],
       plugins: []
     }
   const { a, e } = r
-  const [skills, agents, commands, mcp, instructions, hooks, settings, plugins] =
+  const [skills, agents, commands, mcp, instructions, memories, hooks, settings, plugins] =
     await Promise.all([
       collectSkills(a.baseDir, e),
       collectFlat(a.baseDir, e.agentsDir, 'agent'),
       collectFlat(a.baseDir, e.commandsDir, 'command'),
       collectMcp(a.baseDir, e),
       collectInstruction(a.baseDir, e),
+      collectMemories(a.baseDir, e),
       collectHooks(a.baseDir, e),
       collectSettings(a.baseDir, e),
       collectPlugins(a.baseDir, e)
     ])
-  return { skills, agents, commands, mcp, instructions, hooks, settings, plugins }
+  return { skills, agents, commands, mcp, instructions, memories, hooks, settings, plugins }
 }
 
 export async function readResourceFile(file: string): Promise<string> {
@@ -710,9 +747,25 @@ export async function deleteResourceFile(file: string): Promise<void> {
   if (!file) return
   if (file.endsWith('/SKILL.md') || file.endsWith('\\SKILL.md')) {
     await fs.rm(path.dirname(file), { recursive: true, force: true }).catch(() => {})
-  } else {
-    await fs.rm(file, { force: true }).catch(() => {})
+    return
   }
+  await fs.rm(file, { force: true }).catch(() => {})
+  await pruneMemoryIndex(file)
+}
+
+// Deleting a memory must also drop its pointer line from MEMORY.md: Claude
+// loads that index into context every session, so a line pointing at a file
+// that no longer exists is a false claim, not just leftover clutter.
+async function pruneMemoryIndex(file: string): Promise<void> {
+  const dir = path.dirname(file)
+  const base = path.basename(file)
+  if (path.basename(dir) !== 'memory' || base === 'MEMORY.md') return
+  const index = path.join(dir, 'MEMORY.md')
+  const text = await fs.readFile(index, 'utf8').catch(() => null)
+  if (text === null) return
+  const lines = text.split('\n')
+  const kept = lines.filter((l) => !l.includes(`(${base})`))
+  if (kept.length !== lines.length) await fs.writeFile(index, kept.join('\n'), 'utf8')
 }
 
 // duplicate a resource; returns the new file path

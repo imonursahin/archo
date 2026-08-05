@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.15
+
+**Added**
+- **Dashboard** — a new top-level tab next to Sessions: your open GitHub PRs, the PRs waiting on your review, today's meetings, and your active-sprint Jira issues laid out as board columns. Refreshes every minute in the background (5 minutes when the window isn't focused), backs off on errors, and shows when it last updated.
+- Jira issues can be moved between columns straight from the Dashboard, and a green dot on the tab flags an unseen review request or a meeting about to start.
+- Google Calendar integration: today's meetings with one-click Meet join, a desktop reminder 5 minutes before a meeting starts, plus creating an instant Meet room, a scheduled meeting with guests, or an out-of-office block.
+- Terminals can now be linked to a Jira ticket. The tab shows the key, the popover shows the ticket's live status, and the Dashboard links each issue straight to the terminal doing its work.
+- Terminal tabs can be reordered by dragging, and tagged like sessions.
+- Claude Code's file memory (`~/.claude/projects/*/memory`) now appears in the sidebar as an editable resource group.
+- Settings › Integrations for GitHub and Jira credentials — tokens are encrypted with the OS keychain and never read back into the UI.
+
+**Fixed**
+- Turkish (and any non-ASCII) characters were mangled in the terminal and in anything you copied out of it. A GUI-launched app inherits no locale, so the shell fell back to the C locale and treated every byte as latin-1.
+- Returning to a session now reopens the terminal you were last on instead of always the first one.
+- Session deletion honours the "Confirm before delete" preference.
+
 ## 0.1.14
 
 **Fixed**

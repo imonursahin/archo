@@ -1578,6 +1578,661 @@ textarea {
   overflow: hidden;
   position: relative;
 }
+.center-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.center-pane.hidden {
+  display: none;
+}
+
+/* ---------- top-level view switch (Sessions / Tools) ---------- */
+.view-switch {
+  /* the titlebar is a window-drag region — without this the clicks never
+     reach these buttons, they just drag the window */
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 2px;
+  margin-left: 14px;
+  padding: 2px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.view-switch button {
+  padding: 4px 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.view-switch button:hover {
+  color: var(--text);
+}
+/* attention dot: an unseen review request or a meeting about to start */
+.switch-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  vertical-align: middle;
+  animation: switch-blink 1.4s ease-in-out infinite;
+}
+@keyframes switch-blink {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent);
+  }
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 0 4px transparent;
+  }
+}
+.view-switch button.active {
+  background: var(--bg-2, #1c1c21);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Tools dashboard ---------- */
+.tools-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 18px 20px 28px;
+}
+/* Cards must NOT shrink. They set overflow:hidden, which makes their automatic
+   minimum size 0 — as flex items they'd then squash down to whatever height is
+   left and clip their own content instead of overflowing, so this container
+   never gets anything to scroll. */
+.tools-view > * {
+  flex: 0 0 auto;
+}
+.tools-view.hidden {
+  display: none;
+}
+.tv-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tv-head h2 {
+  font-size: 17px;
+  margin: 0;
+}
+/* GitHub: mine + review-requested always share one row */
+.tv-gh-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+.tv-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tv-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.tv-card-head h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+.tv-card-icon {
+  font-size: 13px;
+  opacity: 0.8;
+}
+.tv-count {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  border-radius: 20px;
+  padding: 1px 7px;
+}
+.tv-updated {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted-2);
+}
+.tv-kind {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  flex: 0 0 auto;
+}
+.tv-kind button {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-radius: 5px;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.tv-kind button.on {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.tv-card-actions {
+  display: flex;
+  gap: 6px;
+}
+.tv-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  margin: 4px 4px 8px;
+  background: color-mix(in srgb, var(--muted) 6%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.tv-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.tv-f {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tv-f > span {
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.tv-f.grow {
+  flex: 1 1 180px;
+}
+.tv-f.mins {
+  width: 78px;
+  flex: 0 0 auto;
+}
+.tv-form-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tv-form-note {
+  flex: 1;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+.tv-in {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+.tv-in:focus {
+  border-color: var(--accent);
+}
+.tv-in.grow {
+  flex: 1 1 140px;
+}
+.tv-in.mins {
+  width: 62px;
+}
+.tv-card-body {
+  padding: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.tv-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
+}
+.tv-row:hover {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.tv-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tv-row-title {
+  font-size: 12.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv-row-sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv-num,
+.tv-key {
+  color: var(--accent);
+}
+.tv-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--green);
+}
+.tv-dot.draft {
+  background: var(--muted-2);
+}
+.tv-more {
+  font-size: 14px;
+  line-height: 1;
+}
+/* the session doing this ticket's work — the whole point of having both halves
+   in one app is being able to jump straight to the terminal */
+.tv-sess {
+  flex: 0 0 auto;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  padding: 2px 7px;
+  border-radius: 20px;
+  cursor: pointer;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.tv-sess:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* session ↔ ticket binding, shown in the session header */
+.si-ticket {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.si-key {
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--accent);
+  cursor: pointer;
+}
+.si-key:hover {
+  text-decoration: underline;
+}
+.si-key-status {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  border-radius: 20px;
+  padding: 1px 8px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
+}
+.si-key-status.cat-indeterminate {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.si-key-status.cat-done {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+.si-tag-input.key {
+  width: 170px;
+  font-family: var(--mono);
+}
+.ss-item-key {
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--accent);
+}
+/* meetings */
+.tv-time {
+  flex: 0 0 auto;
+  width: 48px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.tv-row.next {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.tv-row.next .tv-time,
+.tv-row.next .tv-age {
+  color: var(--accent);
+  font-weight: 600;
+}
+/* happening right now — the strongest state on the card, above "next" */
+.tv-row.live {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+.tv-row.live .tv-row-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.tv-row.live .tv-time,
+.tv-row.live .tv-age {
+  color: var(--green);
+  font-weight: 600;
+}
+.tv-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: switch-blink 1.4s ease-in-out infinite;
+}
+/* already finished — kept for context, dimmed so it doesn't compete */
+.tv-row.past .tv-row-title,
+.tv-row.past .tv-time {
+  color: var(--muted-2);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted-2) 55%, transparent);
+}
+.tv-join {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+}
+.tv-join:hover {
+  filter: brightness(1.1);
+}
+/* transition menu */
+.tv-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+}
+.tv-menu {
+  position: fixed;
+  z-index: 401;
+  /* left/top (or bottom) and max-height are set inline from the button rect so
+     the menu always lands inside the viewport */
+  overflow-y: auto;
+  padding: 5px;
+  background: #17171b;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.tv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.tv-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.tv-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.tv-menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv-menu-arrow {
+  color: var(--muted-2);
+}
+.tv-menu-to {
+  font-size: 11px;
+  font-family: var(--mono);
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.tv-menu-to.cat-indeterminate {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+.tv-menu-to.cat-done {
+  background: color-mix(in srgb, var(--green) 20%, transparent);
+  color: var(--green);
+}
+.tv-menu-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px;
+  text-align: center;
+}
+
+/* staleness, shown on the age stamp itself */
+.tv-age.aging {
+  color: var(--muted);
+}
+.tv-age.stale {
+  color: var(--yellow, #fbbf24);
+}
+.tv-age.rotten {
+  color: var(--red);
+  font-weight: 600;
+}
+.tv-age {
+  font-size: 10.5px;
+  color: var(--muted-2);
+  font-family: var(--mono);
+  flex: 0 0 auto;
+}
+.tv-copy {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  padding: 2px;
+  border-radius: 5px;
+  opacity: 0;
+  cursor: pointer;
+}
+.tv-row:hover .tv-copy {
+  opacity: 1;
+}
+.tv-copy:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* full-width cards get more room than the side-by-side ones, but still scroll */
+.tv-card.wide .tv-card-body {
+  max-height: 46vh;
+}
+/* the board is the exception: scrolling the card would cut a lane mid-item and
+   hide the other columns' headers, so each lane scrolls on its own instead */
+.tv-card.board .tv-card-body {
+  max-height: none;
+  overflow: visible;
+}
+.tools-view > .tv-card {
+  margin-bottom: 14px;
+}
+.tools-view > .tv-card:last-child {
+  margin-bottom: 0;
+}
+/* Wrapping grid, NOT a horizontally scrolling row. A nested scroll container
+   here is what made the card clip its own last row: overflow-x:auto forces
+   overflow-y to compute to auto too, so the board became a scroll box inside a
+   card that clips (overflow:hidden), and nothing was left for the page to
+   scroll. As a grid the lanes just wrap and the whole card grows, which is
+   also what makes it responsive at narrow widths. */
+.tv-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 4px;
+}
+.tv-lane {
+  min-width: 0; /* grid items default to min-content; long titles would push out */
+  background: color-mix(in srgb, var(--muted) 6%, transparent);
+  border-radius: 10px;
+  padding: 6px 6px 8px;
+}
+.tv-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-left: 2px solid var(--muted-2);
+}
+.tv-col-head.cat-new {
+  border-left-color: var(--muted-2);
+}
+.tv-col-head.cat-indeterminate {
+  border-left-color: var(--accent);
+  color: var(--accent);
+}
+.tv-col-head.cat-done {
+  border-left-color: var(--green);
+  color: var(--green);
+}
+.tv-empty,
+.tv-err {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 14px 10px;
+  text-align: center;
+}
+.tv-err {
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+/* ---------- Integrations settings ---------- */
+.integrations {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.int-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.int-badge {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  border-radius: 20px;
+  padding: 1px 7px;
+}
+.jira-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px;
+}
+.jira-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+.jira-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.jira-field span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.jira-field input {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+}
+.jira-field input:focus {
+  border-color: var(--accent);
+}
+.jira-link {
+  font-size: 11.5px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.jira-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .editor-overlay {
   position: absolute;
   inset: 0;
@@ -2823,7 +3478,7 @@ textarea {
   font-size: 12px;
   color: #8b8b93; /* terminal bar is always dark */
   border-radius: 6px 6px 0 0;
-  max-width: 200px;
+  max-width: 260px;
 }
 .tab-colors.inline {
   position: static;
@@ -2871,8 +3526,9 @@ textarea {
   background: var(--green);
 }
 .term-tab .close {
-  color: var(--muted-2);
+  color: #ffffff;
   font-size: 14px;
+  cursor: default; /* don't inherit the tab's grab hand */
 }
 .term-tab .close:hover {
   color: var(--red);
@@ -2885,6 +3541,54 @@ textarea {
   font-size: 12px;
   outline: none;
   width: 100px;
+}
+.term-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-tab-key {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.tab-pop-ticket {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.term-tab-tags {
+  display: flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.term-tab[draggable='true'] {
+  cursor: grab;
+}
+.term-tab.dragging {
+  opacity: 0.4;
+}
+.term-tab.dropzone {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* popover under a tab being edited: color swatches + tag editor */
+.tab-pop {
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: #17171b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.tab-pop-tags {
+  max-width: 220px;
 }
 .term-new {
   padding: 6px 10px;

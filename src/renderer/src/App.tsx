@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar'
 import Editor from './components/Editor'
 import McpPanel from './components/McpPanel'
 import SessionsView from './components/SessionsView'
+import ToolsView from './components/ToolsView'
 import Home from './components/Home'
 import AssistantModal from './components/AssistantModal'
 import CreateModal from './components/CreateModal'
@@ -39,6 +40,13 @@ export default function App(): JSX.Element {
   const [caffeine, setCaffeine] = useState(false)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [showUpdate, setShowUpdate] = useState(false)
+  // the meeting-alert timer lives in main, but the preference lives here — tell
+  // main what it is on every launch, or the toggle only takes effect when it's
+  // flipped again
+  useEffect(() => {
+    window.api.setMeetingAlerts(getPrefs().meetingAlerts)
+  }, [])
+
   useEffect(() => {
     const check = (): void => {
       window.api.checkUpdate().then((r) => {
@@ -61,6 +69,8 @@ export default function App(): JSX.Element {
     sessionId: string
     terminalId?: string
   } | null>(null)
+  const [centerTab, setCenterTab] = useState<'sessions' | 'tools'>('sessions')
+  const [toolsAlert, setToolsAlert] = useState(false)
   const activeTermRef = useRef<string | null>(null)
   const [mcpStatus, setMcpStatus] = useState<Record<string, string>>({})
   const testedSig = useRef('')
@@ -111,6 +121,7 @@ export default function App(): JSX.Element {
       const a = assistants.find((x) => x.id === assistantId)
       if (a) {
         setActive(a)
+        setCenterTab('sessions') // a notification click must land on the terminal
         setPendingOpen({ sessionId, terminalId })
       }
     })
@@ -154,6 +165,7 @@ export default function App(): JSX.Element {
             ...g.commands.map((i) => ['Command', i] as const),
             ...g.mcp.map((i) => ['MCP', i] as const),
             ...g.instructions.map((i) => ['Instruction', i] as const),
+            ...g.memories.map((i) => ['Memory', i] as const),
             ...g.settings.map((i) => ['Settings', i] as const)
           ]
         : []
@@ -372,6 +384,22 @@ export default function App(): JSX.Element {
             {engines.find((e) => e.id === active.engineId)?.name}
           </span>
         </span>
+        {/* top-level view switch: sessions vs the tools dashboard */}
+        <div className="view-switch">
+          <button
+            className={centerTab === 'sessions' ? 'active' : ''}
+            onClick={() => setCenterTab('sessions')}
+          >
+            {t('sessions')}
+          </button>
+          <button
+            className={centerTab === 'tools' ? 'active' : ''}
+            onClick={() => setCenterTab('tools')}
+          >
+            {t('tools')}
+            {toolsAlert && <span className="switch-dot" />}
+          </button>
+        </div>
         <div className="right">
           {update && (
             <button className="btn icon-btn update-badge" onClick={() => setShowUpdate(true)}>
@@ -428,11 +456,26 @@ export default function App(): JSX.Element {
 
         <div className="main-col">
           <div className="center">
-            <SessionsView
-              assistant={active}
-              openTarget={pendingOpen}
-              onSessionOpened={() => setPendingOpen(null)}
-              onActiveTerminal={(id) => (activeTermRef.current = id)}
+            {/* both stay mounted: unmounting SessionsView would tear down every
+                live xterm and force a full scrollback reattach on the way back */}
+            <div className={`center-pane ${centerTab === 'sessions' ? '' : 'hidden'}`}>
+              <SessionsView
+                assistant={active}
+                openTarget={pendingOpen}
+                onSessionOpened={() => setPendingOpen(null)}
+                onActiveTerminal={(id) => (activeTermRef.current = id)}
+              />
+            </div>
+            <ToolsView
+              visible={centerTab === 'tools'}
+              onAlert={setToolsAlert}
+              onOpenSession={(b) => {
+                const a = assistants.find((x) => x.id === b.assistantId)
+                if (!a) return
+                setActive(a)
+                setCenterTab('sessions')
+                setPendingOpen({ sessionId: b.sessionId, terminalId: b.terminalId })
+              }}
             />
             {selected && (
               <div className="editor-overlay">

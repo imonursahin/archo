@@ -56,7 +56,13 @@ const api = {
     ipcRenderer.invoke('termsession:rename', id, name),
   updateSessionMeta: (
     id: string,
-    patch: { note?: string; tags?: string[]; pinned?: boolean; bg?: string; cwd?: string }
+    patch: {
+      note?: string
+      tags?: string[]
+      pinned?: boolean
+      bg?: string
+      cwd?: string
+    }
   ) => ipcRenderer.invoke('termsession:meta', id, patch),
   pickDir: (defaultPath?: string) => ipcRenderer.invoke('dir:pick', defaultPath),
   setSessionCwd: (id: string, cwd: string) => ipcRenderer.invoke('session:setCwd', id, cwd),
@@ -112,8 +118,43 @@ const api = {
     ipcRenderer.invoke('terminal:ranclaude', sessionId, terminalId),
   setTerminalBg: (sessionId: string, terminalId: string, bg: string) =>
     ipcRenderer.invoke('terminal:setbg', sessionId, terminalId, bg),
+  setTerminalJira: (sessionId: string, terminalId: string, key: string) =>
+    ipcRenderer.invoke('terminal:setjira', sessionId, terminalId, key),
+  setTerminalTags: (sessionId: string, terminalId: string, tags: string[]) =>
+    ipcRenderer.invoke('terminal:settags', sessionId, terminalId, tags),
+  reorderTerminals: (sessionId: string, orderedIds: string[]) =>
+    ipcRenderer.invoke('terminal:reorder', sessionId, orderedIds),
   setTerminalClaude: (sessionId: string, terminalId: string, claudeId: string) =>
     ipcRenderer.invoke('terminal:setclaude', sessionId, terminalId, claudeId),
+  // tools dashboard
+  githubTools: () => ipcRenderer.invoke('tools:github'),
+  jiraTools: () => ipcRenderer.invoke('tools:jira'),
+  meetingsToday: () => ipcRenderer.invoke('tools:meetings'),
+  jiraIssue: (key: string) => ipcRenderer.invoke('jira:issue', key),
+  sessionJiraBindings: () => ipcRenderer.invoke('sessions:jiraBindings'),
+  getGoogleConfig: () => ipcRenderer.invoke('google:getConfig'),
+  connectGoogle: (input: { clientId: string; clientSecret: string }) =>
+    ipcRenderer.invoke('google:connect', input),
+  clearGoogleConfig: () => ipcRenderer.invoke('google:clearConfig'),
+  setMeetingAlerts: (on: boolean) => ipcRenderer.invoke('meetings:setAlerts', on),
+  createMeetSpace: () => ipcRenderer.invoke('meet:createSpace'),
+  createMeetingEvent: (input: {
+    title: string
+    startISO: string
+    minutes: number
+    guests: string[]
+    kind?: 'meeting' | 'ooo'
+  }) => ipcRenderer.invoke('meet:createEvent', input),
+  jiraTransitions: (key: string) => ipcRenderer.invoke('jira:transitions', key),
+  jiraTransition: (key: string, id: string) =>
+    ipcRenderer.invoke('jira:transition', key, id),
+  getJiraConfig: () => ipcRenderer.invoke('jira:getConfig'),
+  setJiraConfig: (input: { baseUrl: string; email: string; token?: string }) =>
+    ipcRenderer.invoke('jira:setConfig', input),
+  clearJiraConfig: () => ipcRenderer.invoke('jira:clearConfig'),
+  getGithubConfig: () => ipcRenderer.invoke('github:getConfig'),
+  setGithubConfig: (input: { token: string }) => ipcRenderer.invoke('github:setConfig', input),
+  clearGithubConfig: () => ipcRenderer.invoke('github:clearConfig'),
   // claude transcripts
   listSessions: () => ipcRenderer.invoke('sessions:list'),
   readSession: (file: string) => ipcRenderer.invoke('session:read', file),
