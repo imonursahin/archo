@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.16
+
+**Fixed**
+- The active terminal tab is now actually visible — with several tabs open (especially colored ones) there was no usable way to tell which terminal you were in. Inactive tabs are dimmed and the active one carries an accent bar along its top edge.
+
 ## 0.1.15
 
 **Added**

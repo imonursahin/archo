@@ -3479,6 +3479,16 @@ textarea {
   color: #8b8b93; /* terminal bar is always dark */
   border-radius: 6px 6px 0 0;
   max-width: 260px;
+  /* Colored tabs carry their tint as an INLINE background, which beats any
+     class-based background here — so the active tab can't be marked by its
+     own background at all. Fading the inactive ones instead works whatever
+     tint they're wearing, and is what actually makes the active tab findable
+     when there are half a dozen of them. */
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+.term-tab:hover {
+  opacity: 0.75;
 }
 .tab-colors.inline {
   position: static;
@@ -3509,12 +3519,20 @@ textarea {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-.term-tab.active {
+/* The active tab's background (#0a0a0c, matching the terminal below it) sits
+   only ~6 RGB points from the tab bar's own #101013, so on its own it reads as
+   "no highlight at all" once there are several tabs. The accent bar along the
+   top edge is what actually makes the active one findable at a glance. */
+.term-tab.active,
+.term-tab.active:hover {
   background: #0a0a0c;
   color: #e8e8ea;
+  opacity: 1;
+  box-shadow: inset 0 2px 0 var(--accent);
 }
-.term-tab.tinted.active {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+.term-tab.tinted.active,
+.term-tab.tinted.active:hover {
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 .term-tab input {
   color: #e8e8ea;
