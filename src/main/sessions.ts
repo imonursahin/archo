@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import { randomUUID } from 'crypto'
 import path from 'path'
-import { detectClaudeSessions } from './claude'
+import { detectClaudeSessions, transcriptExists } from './claude'
 
 // User-created terminal sessions (cmux-style). A session is a named workspace
 // that contains one or more child terminals. Every terminal's output is
@@ -224,7 +224,10 @@ export async function deleteSessionsForAssistant(assistantId: string): Promise<s
 
 // `claude` invocations that pick their own conversation — nothing to pin.
 const CLAUDE_BOUND_RE = /(^|\s)(--session-id|--resume|-r|--continue|-c)(\s|=|$)/
-const CLAUDE_CMD_RE = /^claude(\s|$)/
+// a command that STARTS a conversation. `claude mcp list`, `claude doctor` and
+// every other subcommand reject --session-id outright, so they must not be
+// pinned. Kept in sync with CLAUDE_LAUNCH_RE in renderer SessionsView.tsx.
+const CLAUDE_LAUNCH_RE = /^claude(\s+-|\s*$)/
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 
 // Decide, at launch time, WHICH conversation a claude terminal owns.
@@ -236,7 +239,7 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 // is what made restarts bleed sessions into each other.
 function pinClaudeSession(command?: string): { command?: string; claudeSessionId?: string } {
   const cmd = (command || '').trim()
-  if (!cmd || !CLAUDE_CMD_RE.test(cmd)) return { command }
+  if (!cmd || !CLAUDE_LAUNCH_RE.test(cmd)) return { command }
   if (!CLAUDE_BOUND_RE.test(cmd)) {
     const id = randomUUID()
     return { command: `${cmd} --session-id ${id}`, claudeSessionId: id }
@@ -420,6 +423,9 @@ function othersWaiting(cwd: string, terminalId: string, now: number): boolean {
   waiting.set(cwd, byTerm)
   return byTerm.size > 1
 }
+function stopWaiting(cwd: string, terminalId: string): void {
+  waiting.get(cwd)?.delete(terminalId)
+}
 
 // Bind the transcript a hand-typed `claude` just created to this terminal.
 // The launch path pins its id with --session-id and never comes here; this is
@@ -439,6 +445,7 @@ export async function claimClaudeSession(
       .sort((a, b) => a.btime - b.btime)[0]?.id
     if (!id) return null
     await setTerminalClaude(sessionId, terminalId, id)
+    stopWaiting(cwd, terminalId)
     return id
   })
 }
@@ -460,13 +467,14 @@ export async function resolveResumeId(
       .find((x) => x.id === sessionId)
       ?.terminals.find((x) => x.id === terminalId)
     if (!t) return null
-    if (!t.cwd) return t.claudeSessionId ? { id: t.claudeSessionId, exists: false } : null
-    const found = await detectClaudeSessions(t.cwd, 0)
     if (t.claudeSessionId) {
-      return { id: t.claudeSessionId, exists: found.some((c) => c.id === t.claudeSessionId) }
+      return { id: t.claudeSessionId, exists: await transcriptExists(t.claudeSessionId) }
     }
+    if (!t.cwd) return null
     const claimed = await claimedClaudeIds(terminalId)
-    const id = found.find((c) => !claimed.has(c.id) && c.mtime >= t.createdAt)?.id
+    const id = (await detectClaudeSessions(t.cwd, 0))
+      .filter((c) => !claimed.has(c.id) && c.btime >= t.createdAt - 3000)
+      .sort((a, b) => a.btime - b.btime)[0]?.id
     if (!id) return null
     await setTerminalClaude(sessionId, terminalId, id)
     return { id, exists: true }

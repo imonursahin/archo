@@ -134,6 +134,23 @@ export async function detectClaudeSession(cwd: string, sinceMs: number): Promise
   return best?.id ?? null
 }
 
+// Does a conversation with this id exist anywhere? Deliberately NOT scoped to a
+// folder: a terminal opened at the repo root may have `cd`-ed somewhere else
+// before running claude, so its transcript lives under a different project slug
+// than the one the terminal recorded.
+export async function transcriptExists(id: string): Promise<boolean> {
+  const projectsDir = path.join(CLAUDE_DIR, 'projects')
+  for (const proj of await safeReadDir(projectsDir)) {
+    try {
+      await fs.stat(path.join(projectsDir, proj, `${id}.jsonl`))
+      return true
+    } catch {
+      /* not in this project */
+    }
+  }
+  return false
+}
+
 // All claude sessions for a cwd, newest first, touched at/after sinceMs.
 // `btime` (file creation) is reported alongside `mtime` because the two answer
 // different questions: mtime says "this conversation is alive", btime says

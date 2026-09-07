@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { randomUUID } from 'crypto'
 
 const api = {
   // File.path was removed in Electron 32+; this is the replacement for
@@ -113,9 +112,6 @@ const api = {
   terminalSnapshot: (id: string) => ipcRenderer.invoke('terminal:snapshot', id),
   detectClaudeSession: (cwd: string, sinceMs: number) =>
     ipcRenderer.invoke('claude:detect', cwd, sinceMs),
-  // sync on purpose: the caller needs an id in the same tick it rewrites a
-  // typed command line, before the Enter key reaches the shell
-  newSessionId: () => randomUUID(),
   claimClaudeSession: (sessionId: string, terminalId: string, cwd: string, sinceMs: number) =>
     ipcRenderer.invoke('terminal:claimclaude', sessionId, terminalId, cwd, sinceMs),
   resolveResumeId: (sessionId: string, terminalId: string) =>

@@ -38,10 +38,10 @@ const theme = {
 // terminals whose PTY was started during this app run
 const started = new Set<string>()
 
-// a typed line that starts a NEW claude conversation (one that hasn't already
-// been told which conversation to open)
-const CLAUDE_LINE_RE = /^claude(\s|$)/
-const CLAUDE_BOUND_RE = /(^|\s)(--session-id|--resume|-r|--continue|-c)(\s|=|$)/
+// a typed line that starts a conversation, as opposed to `claude mcp list` and
+// the other subcommands. Kept in sync with CLAUDE_LAUNCH_RE in main/sessions.ts
+// (different process, same rule — there is no shared module in this repo).
+const CLAUDE_LAUNCH_RE = /^claude(\s+-|\s*$)/
 
 // most recent real cols/rows any terminal fit to — new terminals share the
 // same session pane, so this is a reliable size hint before their own xterm
@@ -287,27 +287,6 @@ function TermInstance({
       }, 3000)
     }
     xterm.onData((d) => {
-      // Pin a hand-typed `claude` the moment Enter is pressed: the line is
-      // still sitting in the shell's editor, so appending `--session-id <uuid>`
-      // ahead of the newline binds this terminal to its own conversation,
-      // exactly as the launch path does. Watching the transcripts folder after
-      // the fact cannot do that — a new file proves a claude started, never
-      // which terminal started it, so in a folder running several at once the
-      // first watcher to tick would take a stranger's conversation.
-      if (!claudeMarkedRef.current && !d.includes('\x1b')) {
-        const brk = d.search(/[\r\n]/)
-        const line = brk < 0 ? '' : (inputLine + d.slice(0, brk)).trim()
-        if (line && CLAUDE_LINE_RE.test(line) && !CLAUDE_BOUND_RE.test(line)) {
-          const id = window.api.newSessionId()
-          window.api.ptyWrite(term.id, `${d.slice(0, brk)} --session-id ${id}${d.slice(brk)}`)
-          inputLine = ''
-          claudeMarkedRef.current = true
-          setIsClaudeTerm(true)
-          setResumeId(id)
-          window.api.setTerminalClaude(sessionId, term.id, id)
-          return
-        }
-      }
       window.api.ptyWrite(term.id, d)
       if (claudeMarkedRef.current) return
       if (d.includes('\x1b')) {
@@ -316,7 +295,7 @@ function TermInstance({
       }
       for (const ch of d) {
         if (ch === '\r' || ch === '\n') {
-          if (CLAUDE_LINE_RE.test(inputLine.trim())) markClaudeRun()
+          if (CLAUDE_LAUNCH_RE.test(inputLine.trim())) markClaudeRun()
           inputLine = ''
         } else if (ch === '\x7f' || ch === '\b') {
           inputLine = inputLine.slice(0, -1)
