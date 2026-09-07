@@ -38,6 +38,11 @@ const theme = {
 // terminals whose PTY was started during this app run
 const started = new Set<string>()
 
+// a typed line that starts a NEW claude conversation (one that hasn't already
+// been told which conversation to open)
+const CLAUDE_LINE_RE = /^claude(\s|$)/
+const CLAUDE_BOUND_RE = /(^|\s)(--session-id|--resume|-r|--continue|-c)(\s|=|$)/
+
 // most recent real cols/rows any terminal fit to — new terminals share the
 // same session pane, so this is a reliable size hint before their own xterm
 // has mounted, avoiding the wide/narrow spawn-size guess for the first frame.
@@ -260,11 +265,13 @@ function TermInstance({
       window.api.markTerminalRanClaude(sessionId, term.id)
       if (term.cwd) captureManualClaude(term.cwd)
     }
-    // A hand-typed `claude` can't be pinned with --session-id, so its transcript
-    // still has to be found after the fact. Claude writes that file when the
-    // conversation gets its first message, which is whenever the user gets
-    // round to typing — the old 30-second deadline expired long before that on
-    // any terminal opened ahead of time, leaving it with no id to resume.
+    // Fallback for a `claude` we could not rewrite before it was sent (recalled
+    // from shell history, say): watch for the transcript it creates. Claude
+    // writes that file when the conversation gets its first message, which is
+    // whenever the user gets round to typing — the old 30-second deadline
+    // expired long before that on any terminal opened ahead of time. Main
+    // declines to answer while a sibling terminal in the same folder is also
+    // waiting, because a new file proves a claude started, never whose.
     const captureManualClaude = (cwd: string): void => {
       const since = Date.now()
       let tries = 0
@@ -280,6 +287,27 @@ function TermInstance({
       }, 3000)
     }
     xterm.onData((d) => {
+      // Pin a hand-typed `claude` the moment Enter is pressed: the line is
+      // still sitting in the shell's editor, so appending `--session-id <uuid>`
+      // ahead of the newline binds this terminal to its own conversation,
+      // exactly as the launch path does. Watching the transcripts folder after
+      // the fact cannot do that — a new file proves a claude started, never
+      // which terminal started it, so in a folder running several at once the
+      // first watcher to tick would take a stranger's conversation.
+      if (!claudeMarkedRef.current && !d.includes('\x1b')) {
+        const brk = d.search(/[\r\n]/)
+        const line = brk < 0 ? '' : (inputLine + d.slice(0, brk)).trim()
+        if (line && CLAUDE_LINE_RE.test(line) && !CLAUDE_BOUND_RE.test(line)) {
+          const id = window.api.newSessionId()
+          window.api.ptyWrite(term.id, `${d.slice(0, brk)} --session-id ${id}${d.slice(brk)}`)
+          inputLine = ''
+          claudeMarkedRef.current = true
+          setIsClaudeTerm(true)
+          setResumeId(id)
+          window.api.setTerminalClaude(sessionId, term.id, id)
+          return
+        }
+      }
       window.api.ptyWrite(term.id, d)
       if (claudeMarkedRef.current) return
       if (d.includes('\x1b')) {
@@ -288,7 +316,7 @@ function TermInstance({
       }
       for (const ch of d) {
         if (ch === '\r' || ch === '\n') {
-          if (/^claude(\s|$)/.test(inputLine.trim())) markClaudeRun()
+          if (CLAUDE_LINE_RE.test(inputLine.trim())) markClaudeRun()
           inputLine = ''
         } else if (ch === '\x7f' || ch === '\b') {
           inputLine = inputLine.slice(0, -1)
@@ -427,13 +455,15 @@ function TermInstance({
     // an id-less claude terminal adopts an unclaimed conversation in its own
     // folder rather than racing every sibling terminal for `--continue`'s
     // single "most recent" answer
-    const id =
-      resumeId ||
-      term.claudeSessionId ||
-      (claudeish ? await window.api.resolveResumeId(sessionId, term.id) : null)
-    if (id) {
-      cmd = `claude --resume ${id}`
-      setResumeId(id)
+    const bound = claudeish ? await window.api.resolveResumeId(sessionId, term.id) : null
+    if (bound) {
+      // an id whose claude never got as far as a first message has no
+      // transcript yet; `--resume` on it exits with "No conversation found",
+      // so the terminal starts UNDER the id it already owns instead
+      cmd = bound.exists
+        ? `claude --resume ${bound.id}`
+        : `claude --session-id ${bound.id}`
+      setResumeId(bound.id)
     } else if (claudeish) {
       cmd = 'claude --continue'
     } else if (raw) {

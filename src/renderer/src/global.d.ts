@@ -355,7 +355,11 @@ export interface StudioApi {
     cwd: string,
     sinceMs: number
   ): Promise<string | null>
-  resolveResumeId(sessionId: string, terminalId: string): Promise<string | null>
+  resolveResumeId(
+    sessionId: string,
+    terminalId: string
+  ): Promise<{ id: string; exists: boolean } | null>
+  newSessionId(): string
   setTerminalClaude(sessionId: string, terminalId: string, claudeId: string): Promise<void>
   markTerminalRanClaude(sessionId: string, terminalId: string): Promise<void>
   setTerminalBg(sessionId: string, terminalId: string, bg: string): Promise<void>

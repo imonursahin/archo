@@ -394,46 +394,83 @@ async function claimedClaudeIds(exceptTerminalId?: string): Promise<Set<string>>
   return out
 }
 
+// Deciding an owner is read-modify-write across several awaits (read the
+// claims, list the transcripts, persist the winner) over a store that is
+// rewritten whole. Two terminals interleaving inside that window would both
+// see the same id as free and both take it — the exact duplicate-resume the
+// claim list exists to prevent — so every claim runs one at a time.
+let claimChain: Promise<unknown> = Promise.resolve()
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const next = claimChain.then(fn, fn)
+  claimChain = next.catch(() => undefined)
+  return next
+}
+
+// Terminals currently waiting for a hand-typed `claude` to produce its
+// transcript, per folder. A transcript's creation time proves it was born
+// after someone typed `claude` — never WHICH terminal typed it — so while two
+// terminals in the same folder are both waiting, the next file to appear
+// belongs to an unknowable one of them and neither may take it.
+const waiting = new Map<string, Map<string, number>>()
+const WAIT_TTL = 10_000
+function othersWaiting(cwd: string, terminalId: string, now: number): boolean {
+  const byTerm = waiting.get(cwd) || new Map<string, number>()
+  for (const [id, seen] of byTerm) if (now - seen > WAIT_TTL) byTerm.delete(id)
+  byTerm.set(terminalId, now)
+  waiting.set(cwd, byTerm)
+  return byTerm.size > 1
+}
+
 // Bind the transcript a hand-typed `claude` just created to this terminal.
-// Only transcripts BORN after the user typed it count — the sibling sessions
-// running in the same folder keep their mtime fresh every second, so matching
-// on mtime let one terminal claim another terminal's conversation.
+// The launch path pins its id with --session-id and never comes here; this is
+// the fallback for a `claude` we could not rewrite before the user sent it
+// (recalled from shell history, say), so it may also decline to answer.
 export async function claimClaudeSession(
   sessionId: string,
   terminalId: string,
   cwd: string,
   sinceMs: number
 ): Promise<string | null> {
-  const claimed = await claimedClaudeIds(terminalId)
-  const id = (await detectClaudeSessions(cwd, sinceMs))
-    .filter((c) => c.btime >= sinceMs - 3000 && !claimed.has(c.id))
-    .sort((a, b) => a.btime - b.btime)[0]?.id
-  if (!id) return null
-  await setTerminalClaude(sessionId, terminalId, id)
-  return id
+  if (othersWaiting(cwd, terminalId, Date.now())) return null
+  return serialized(async () => {
+    const claimed = await claimedClaudeIds(terminalId)
+    const id = (await detectClaudeSessions(cwd, sinceMs))
+      .filter((c) => c.btime >= sinceMs - 3000 && !claimed.has(c.id))
+      .sort((a, b) => a.btime - b.btime)[0]?.id
+    if (!id) return null
+    await setTerminalClaude(sessionId, terminalId, id)
+    return id
+  })
 }
 
-// Which conversation a claude terminal resumes after a restart. Terminals
-// created before session pinning (or whose claude was typed by hand and never
-// captured) have no id — they adopt the newest transcript in their own folder
-// that no other terminal has claimed, and keep it. `claude --continue` is the
-// last resort only: it resolves to the same conversation for every terminal
-// sharing a directory.
+// Which conversation a claude terminal reopens after a restart, and whether
+// that conversation exists yet: a pinned id whose claude never got as far as a
+// first message has no transcript, and `--resume` on it exits immediately with
+// "No conversation found" — the terminal has to START under the id it owns
+// instead. Terminals from before pinning have no id at all; they adopt the
+// newest unclaimed transcript in their own folder that was touched while they
+// existed. `claude --continue` stays the last resort only: it resolves to the
+// same conversation for every terminal sharing a directory.
 export async function resolveResumeId(
   sessionId: string,
   terminalId: string
-): Promise<string | null> {
-  const t = (await load())
-    .find((x) => x.id === sessionId)
-    ?.terminals.find((x) => x.id === terminalId)
-  if (!t) return null
-  if (t.claudeSessionId) return t.claudeSessionId
-  if (!t.cwd) return null
-  const claimed = await claimedClaudeIds(terminalId)
-  const id = (await detectClaudeSessions(t.cwd, 0)).find((c) => !claimed.has(c.id))?.id
-  if (!id) return null
-  await setTerminalClaude(sessionId, terminalId, id)
-  return id
+): Promise<{ id: string; exists: boolean } | null> {
+  return serialized(async () => {
+    const t = (await load())
+      .find((x) => x.id === sessionId)
+      ?.terminals.find((x) => x.id === terminalId)
+    if (!t) return null
+    if (!t.cwd) return t.claudeSessionId ? { id: t.claudeSessionId, exists: false } : null
+    const found = await detectClaudeSessions(t.cwd, 0)
+    if (t.claudeSessionId) {
+      return { id: t.claudeSessionId, exists: found.some((c) => c.id === t.claudeSessionId) }
+    }
+    const claimed = await claimedClaudeIds(terminalId)
+    const id = found.find((c) => !claimed.has(c.id) && c.mtime >= t.createdAt)?.id
+    if (!id) return null
+    await setTerminalClaude(sessionId, terminalId, id)
+    return { id, exists: true }
+  })
 }
 
 export async function removeTerminal(sessionId: string, terminalId: string): Promise<void> {
