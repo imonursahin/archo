@@ -207,8 +207,7 @@ import {
   listSessions,
   readSession,
   searchTranscripts,
-  detectClaudeSession,
-  detectClaudeSessions
+  detectClaudeSession
 } from './claude'
 import {
   setToolsPaths,
@@ -249,6 +248,8 @@ import {
   renameTerminal,
   removeTerminal,
   setTerminalClaude,
+  claimClaudeSession,
+  resolveResumeId,
   markTerminalRanClaude,
   setTerminalBg,
   setTerminalTags,
@@ -616,8 +617,13 @@ function registerIpc(): void {
   handle('terminal:islive', (id: string) => isLive(id))
   handle('terminal:snapshot', (id: string) => snapshot(id))
   handle('claude:detect', (cwd: string, sinceMs: number) => detectClaudeSession(cwd, sinceMs))
-  handle('claude:detectMany', (cwd: string, sinceMs: number) =>
-    detectClaudeSessions(cwd, sinceMs)
+  handle(
+    'terminal:claimclaude',
+    (sessionId: string, terminalId: string, cwd: string, sinceMs: number) =>
+      claimClaudeSession(sessionId, terminalId, cwd, sinceMs)
+  )
+  handle('terminal:resumeid', (sessionId: string, terminalId: string) =>
+    resolveResumeId(sessionId, terminalId)
   )
   handle('terminal:ranclaude', (sessionId: string, terminalId: string) =>
     markTerminalRanClaude(sessionId, terminalId)

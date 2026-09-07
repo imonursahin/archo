@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.17
+
+**Fixed**
+- Terminals no longer resume each other's Claude conversation after the app is restarted. Archo used to work out which conversation a terminal owned by watching the transcripts folder and taking the most recently written file — but every Claude session running in that folder keeps its file fresh, so a terminal could adopt a sibling's conversation, or find nothing within the 30-second deadline and end up with no id at all. Those terminals then restarted with `claude --continue`, which hands the single newest conversation to every terminal that asks. Archo now pins the id up front with `--session-id` when it launches Claude, so a terminal owns its conversation from the first frame. A `claude` you type yourself is still matched afterwards, but by file creation time rather than last-write, against the ids every other terminal already owns, and for ten minutes instead of thirty seconds. Terminals that never captured an id adopt an unclaimed conversation from their own folder and keep it.
+
 ## 0.1.16
 
 **Fixed**

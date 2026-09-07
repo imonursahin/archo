@@ -349,7 +349,13 @@ export interface StudioApi {
   terminalIsLive(id: string): Promise<boolean>
   terminalSnapshot(id: string): Promise<{ buffer: string; seq: number } | null>
   detectClaudeSession(cwd: string, sinceMs: number): Promise<string | null>
-  detectClaudeSessions(cwd: string, sinceMs: number): Promise<{ id: string; mtime: number }[]>
+  claimClaudeSession(
+    sessionId: string,
+    terminalId: string,
+    cwd: string,
+    sinceMs: number
+  ): Promise<string | null>
+  resolveResumeId(sessionId: string, terminalId: string): Promise<string | null>
   setTerminalClaude(sessionId: string, terminalId: string, claudeId: string): Promise<void>
   markTerminalRanClaude(sessionId: string, terminalId: string): Promise<void>
   setTerminalBg(sessionId: string, terminalId: string, bg: string): Promise<void>

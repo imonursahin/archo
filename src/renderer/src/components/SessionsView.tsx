@@ -45,24 +45,6 @@ let lastKnownSize: { cols: number; rows: number } | null = null
 
 // preset tab colors (first = default/none) — muted but visible on the dark tab bar
 const TAB_BGS = ['', '#3a3a42', '#2b4a6f', '#265c43', '#4a2f6b', '#6b2f38', '#6b5320', '#245b5e']
-// claude session ids already assigned to a terminal (so two terminals in the
-// same folder never resume the SAME conversation)
-const claimedClaude = new Set<string>()
-
-// pick a distinct claude session for a terminal: prefer the transcript created
-// soonest at/after the terminal started, among ids not yet claimed.
-function pickClaudeId(
-  cands: { id: string; mtime: number }[],
-  createdAt: number
-): string | null {
-  const free = cands.filter((c) => !claimedClaude.has(c.id))
-  if (free.length === 0) return null
-  const after = free
-    .filter((c) => c.mtime >= createdAt - 3000)
-    .sort((a, b) => a.mtime - b.mtime)
-  return (after[0] || free.sort((a, b) => b.mtime - a.mtime)[0]).id
-}
-
 // A few columns narrower than xterm's own fit: TUIs that fill status/footer
 // lines to the exact last column (Claude's included, packed with emoji) can
 // still clip that last character by a hair on residual sub-pixel drift
@@ -278,22 +260,24 @@ function TermInstance({
       window.api.markTerminalRanClaude(sessionId, term.id)
       if (term.cwd) captureManualClaude(term.cwd)
     }
+    // A hand-typed `claude` can't be pinned with --session-id, so its transcript
+    // still has to be found after the fact. Claude writes that file when the
+    // conversation gets its first message, which is whenever the user gets
+    // round to typing — the old 30-second deadline expired long before that on
+    // any terminal opened ahead of time, leaving it with no id to resume.
     const captureManualClaude = (cwd: string): void => {
       const since = Date.now()
       let tries = 0
       claudeCaptureTimer = setInterval(async () => {
         tries++
-        const cands = await window.api.detectClaudeSessions(cwd, since)
-        const id = pickClaudeId(cands, since)
+        const id = await window.api.claimClaudeSession(sessionId, term.id, cwd, since)
         if (id) {
           clearInterval(claudeCaptureTimer)
-          claimedClaude.add(id)
           setResumeId(id)
-          window.api.setTerminalClaude(sessionId, term.id, id)
-        } else if (tries > 20) {
+        } else if (tries > 200) {
           clearInterval(claudeCaptureTimer)
         }
-      }, 1500)
+      }, 3000)
     }
     xterm.onData((d) => {
       window.api.ptyWrite(term.id, d)
@@ -349,7 +333,6 @@ function TermInstance({
         const claudeish =
           !!claudeId || !!term.ranClaude || (term.command || '').trim().startsWith('claude')
         if (claudeish) {
-          if (claudeId) claimedClaude.add(claudeId)
           setResumeId(claudeId)
           setIsClaudeTerm(true)
         } else {
@@ -440,10 +423,18 @@ function TermInstance({
   async function restart(): Promise<void> {
     const raw = (term.command || '').trim()
     let cmd = ''
-    const id = resumeId || term.claudeSessionId
+    const claudeish = isClaudeTerm || raw.startsWith('claude')
+    // an id-less claude terminal adopts an unclaimed conversation in its own
+    // folder rather than racing every sibling terminal for `--continue`'s
+    // single "most recent" answer
+    const id =
+      resumeId ||
+      term.claudeSessionId ||
+      (claudeish ? await window.api.resolveResumeId(sessionId, term.id) : null)
     if (id) {
       cmd = `claude --resume ${id}`
-    } else if (isClaudeTerm || raw.startsWith('claude')) {
+      setResumeId(id)
+    } else if (claudeish) {
       cmd = 'claude --continue'
     } else if (raw) {
       cmd = raw
@@ -755,36 +746,6 @@ export default function SessionsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openTarget, sessions])
 
-  // After launching a claude terminal, poll for the transcript it creates and
-  // record its session id so we can later `--resume <id>` exactly this chat.
-  function captureClaude(sessId: string, t: { id: string; command?: string; cwd?: string }): void {
-    if (!t.command || !t.command.trim().startsWith('claude') || !t.cwd) return
-    const since = Date.now()
-    let tries = 0
-    const timer = setInterval(async () => {
-      tries++
-      const cands = t.cwd ? await window.api.detectClaudeSessions(t.cwd, since) : []
-      const id = pickClaudeId(cands, since)
-      if (id) {
-        clearInterval(timer)
-        claimedClaude.add(id)
-        await window.api.setTerminalClaude(sessId, t.id, id)
-        setOpen((o) =>
-          o
-            ? {
-                ...o,
-                terminals: o.terminals.map((x) =>
-                  x.id === t.id ? { ...x, claudeSessionId: id } : x
-                )
-              }
-            : o
-        )
-      } else if (tries > 12) {
-        clearInterval(timer)
-      }
-    }, 1500)
-  }
-
   async function addTerminal(opts?: { name?: string; cwd?: string; command?: string }): Promise<void> {
     if (!open) return
     const { terminal, logPath } = await window.api.addTerminal(open.id, {
@@ -804,7 +765,6 @@ export default function SessionsView({
     setLogPaths((p) => ({ ...p, [terminal.id]: logPath }))
     setOpen((o) => (o ? { ...o, terminals: [...o.terminals, terminal] } : o))
     setActive(terminal.id)
-    captureClaude(open.id, terminal)
   }
 
   // "▶ Çalıştır" (assistant) and session resume route through the bus
@@ -834,7 +794,6 @@ export default function SessionsView({
       setLogPaths((p) => ({ ...p, [terminal.id]: logPath }))
       setOpen((o) => (o ? { ...o, terminals: [...o.terminals, terminal] } : o))
       setActive(terminal.id)
-      captureClaude(sess.id, terminal)
     })
   }, [open, assistant.id])
 

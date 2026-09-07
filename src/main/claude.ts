@@ -134,20 +134,29 @@ export async function detectClaudeSession(cwd: string, sinceMs: number): Promise
   return best?.id ?? null
 }
 
-// All claude sessions for a cwd, newest first, created at/after sinceMs.
+// All claude sessions for a cwd, newest first, touched at/after sinceMs.
+// `btime` (file creation) is reported alongside `mtime` because the two answer
+// different questions: mtime says "this conversation is alive", btime says
+// "this conversation STARTED here". Binding a terminal to a transcript needs
+// the second one — in a folder where several sessions run at once, every one of
+// them keeps its mtime fresh.
 export async function detectClaudeSessions(
   cwd: string,
   sinceMs: number
-): Promise<{ id: string; mtime: number }[]> {
+): Promise<{ id: string; mtime: number; btime: number }[]> {
   const slug = cwd.replace(/[/.]/g, '-')
   const dir = path.join(CLAUDE_DIR, 'projects', slug)
-  const out: { id: string; mtime: number }[] = []
+  const out: { id: string; mtime: number; btime: number }[] = []
   for (const f of await safeReadDir(dir)) {
     if (!f.endsWith('.jsonl')) continue
     try {
       const stat = await fs.stat(path.join(dir, f))
       if (stat.mtimeMs >= sinceMs - 3000) {
-        out.push({ id: f.replace(/\.jsonl$/, ''), mtime: stat.mtimeMs })
+        out.push({
+          id: f.replace(/\.jsonl$/, ''),
+          mtime: stat.mtimeMs,
+          btime: stat.birthtimeMs || stat.ctimeMs
+        })
       }
     } catch {
       /* ignore */

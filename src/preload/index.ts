@@ -112,8 +112,10 @@ const api = {
   terminalSnapshot: (id: string) => ipcRenderer.invoke('terminal:snapshot', id),
   detectClaudeSession: (cwd: string, sinceMs: number) =>
     ipcRenderer.invoke('claude:detect', cwd, sinceMs),
-  detectClaudeSessions: (cwd: string, sinceMs: number) =>
-    ipcRenderer.invoke('claude:detectMany', cwd, sinceMs),
+  claimClaudeSession: (sessionId: string, terminalId: string, cwd: string, sinceMs: number) =>
+    ipcRenderer.invoke('terminal:claimclaude', sessionId, terminalId, cwd, sinceMs),
+  resolveResumeId: (sessionId: string, terminalId: string) =>
+    ipcRenderer.invoke('terminal:resumeid', sessionId, terminalId),
   markTerminalRanClaude: (sessionId: string, terminalId: string) =>
     ipcRenderer.invoke('terminal:ranclaude', sessionId, terminalId),
   setTerminalBg: (sessionId: string, terminalId: string, bg: string) =>

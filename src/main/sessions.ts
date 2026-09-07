@@ -1,5 +1,7 @@
 import { promises as fs } from 'fs'
+import { randomUUID } from 'crypto'
 import path from 'path'
+import { detectClaudeSessions } from './claude'
 
 // User-created terminal sessions (cmux-style). A session is a named workspace
 // that contains one or more child terminals. Every terminal's output is
@@ -220,6 +222,31 @@ export async function deleteSessionsForAssistant(assistantId: string): Promise<s
   return termIds
 }
 
+// `claude` invocations that pick their own conversation — nothing to pin.
+const CLAUDE_BOUND_RE = /(^|\s)(--session-id|--resume|-r|--continue|-c)(\s|=|$)/
+const CLAUDE_CMD_RE = /^claude(\s|$)/
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+// Decide, at launch time, WHICH conversation a claude terminal owns.
+// We pin it with `--session-id <uuid>` instead of watching the transcripts
+// folder afterwards to find out: that watch was a race against every other
+// claude running in the same directory, and a terminal that lost it had no id
+// to resume — so a restart fell back to `claude --continue`, which hands the
+// single most recently touched conversation to every terminal that asks. That
+// is what made restarts bleed sessions into each other.
+function pinClaudeSession(command?: string): { command?: string; claudeSessionId?: string } {
+  const cmd = (command || '').trim()
+  if (!cmd || !CLAUDE_CMD_RE.test(cmd)) return { command }
+  if (!CLAUDE_BOUND_RE.test(cmd)) {
+    const id = randomUUID()
+    return { command: `${cmd} --session-id ${id}`, claudeSessionId: id }
+  }
+  // already bound to a specific conversation (e.g. the Resume button's
+  // `claude --resume <id>`) — adopt that id rather than minting a new one
+  const explicit = /--(?:session-id|resume|r)[= ]([0-9a-f-]+)/i.exec(cmd)?.[1]
+  return { command, claudeSessionId: explicit && UUID_RE.test(explicit) ? explicit : undefined }
+}
+
 export async function addTerminal(
   sessionId: string,
   input: { name?: string; cwd?: string; command?: string }
@@ -227,12 +254,16 @@ export async function addTerminal(
   const list = await load()
   const s = list.find((x) => x.id === sessionId)
   if (!s) throw new Error('session yok')
+  const pinned = pinClaudeSession(input.command)
   const t: TerminalRec = {
     id: `term-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`,
     name: input.name || `Terminal ${s.terminals.length + 1}`,
     createdAt: Date.now(),
     cwd: input.cwd,
-    command: input.command
+    command: pinned.command,
+    ...(pinned.claudeSessionId
+      ? { claudeSessionId: pinned.claudeSessionId, ranClaude: true }
+      : {})
   }
   s.terminals.push(t)
   await persist(list)
@@ -350,6 +381,59 @@ export async function markTerminalRanClaude(
     return t
   })
   if (changed) await persist(list)
+}
+
+// Every claude conversation already owned by a terminal. The claim list is the
+// store itself, not per-window state: two terminals in different sessions must
+// never resume the same conversation either.
+async function claimedClaudeIds(exceptTerminalId?: string): Promise<Set<string>> {
+  const out = new Set<string>()
+  for (const s of await load())
+    for (const t of s.terminals)
+      if (t.claudeSessionId && t.id !== exceptTerminalId) out.add(t.claudeSessionId)
+  return out
+}
+
+// Bind the transcript a hand-typed `claude` just created to this terminal.
+// Only transcripts BORN after the user typed it count — the sibling sessions
+// running in the same folder keep their mtime fresh every second, so matching
+// on mtime let one terminal claim another terminal's conversation.
+export async function claimClaudeSession(
+  sessionId: string,
+  terminalId: string,
+  cwd: string,
+  sinceMs: number
+): Promise<string | null> {
+  const claimed = await claimedClaudeIds(terminalId)
+  const id = (await detectClaudeSessions(cwd, sinceMs))
+    .filter((c) => c.btime >= sinceMs - 3000 && !claimed.has(c.id))
+    .sort((a, b) => a.btime - b.btime)[0]?.id
+  if (!id) return null
+  await setTerminalClaude(sessionId, terminalId, id)
+  return id
+}
+
+// Which conversation a claude terminal resumes after a restart. Terminals
+// created before session pinning (or whose claude was typed by hand and never
+// captured) have no id — they adopt the newest transcript in their own folder
+// that no other terminal has claimed, and keep it. `claude --continue` is the
+// last resort only: it resolves to the same conversation for every terminal
+// sharing a directory.
+export async function resolveResumeId(
+  sessionId: string,
+  terminalId: string
+): Promise<string | null> {
+  const t = (await load())
+    .find((x) => x.id === sessionId)
+    ?.terminals.find((x) => x.id === terminalId)
+  if (!t) return null
+  if (t.claudeSessionId) return t.claudeSessionId
+  if (!t.cwd) return null
+  const claimed = await claimedClaudeIds(terminalId)
+  const id = (await detectClaudeSessions(t.cwd, 0)).find((c) => !claimed.has(c.id))?.id
+  if (!id) return null
+  await setTerminalClaude(sessionId, terminalId, id)
+  return id
 }
 
 export async function removeTerminal(sessionId: string, terminalId: string): Promise<void> {
