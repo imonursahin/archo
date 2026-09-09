@@ -278,12 +278,15 @@ export async function renameTerminal(
   sessionId: string,
   terminalId: string,
   name: string
-): Promise<void> {
+): Promise<boolean> {
   const list = await load()
   const s = list.find((x) => x.id === sessionId)
-  if (!s) return
+  if (!s) return false
+  const cur = s.terminals.find((t) => t.id === terminalId)
+  if (!cur || cur.name === name) return false
   s.terminals = s.terminals.map((t) => (t.id === terminalId ? { ...t, name } : t))
   await persist(list)
+  return true
 }
 
 export async function setTerminalClaude(

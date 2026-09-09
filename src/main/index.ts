@@ -261,7 +261,17 @@ import {
   listJiraBindings
 } from './sessions'
 import { gitStatus, gitRevertFile, gitCheckpoint, gitRestoreCheckpoint, gitBranch } from './git'
-import { createTerm, writeTerm, resizeTerm, killTerm, killAll, isLive, snapshot } from './pty'
+import {
+  createTerm,
+  writeTerm,
+  resizeTerm,
+  killTerm,
+  killAll,
+  isLive,
+  snapshot,
+  foreground,
+  recentOutput
+} from './pty'
 import { testMcp, callMcpTool } from './mcpClient'
 import { getUsage, sessionUsage } from './usage'
 import { getRealUsage } from './realUsage'
@@ -344,6 +354,28 @@ function handle(channel: string, fn: (...a: any[]) => any): void {
       throw err
     }
   })
+}
+
+// Claude is either working or waiting on a prompt that reads single keys (a
+// permission select, a resume list). Typed input means something else entirely
+// there — a digit in the name picks an option and the trailing Return confirms
+// it — so a rename must never reach the pty in that state.
+const CLAUDE_BUSY_RE = /esc to interrupt|ctrl-c to interrupt|Do you want|❯\s*\d[.)]/i
+
+// Mirror a tab rename onto the Claude session running in that terminal, so the
+// conversation carries the same name in /resume. Sent as typed input because
+// /rename is a slash command; only while Claude is the foreground process and
+// showing an ordinary input box — at a shell prompt the same line would just be
+// an unknown command.
+// ponytail: a rename typed while an unsent message is half-written in Claude's
+// input box appends to it; deferring until the box is empty needs state the pty
+// doesn't expose. Renaming from the tab is skipped, not queued, when in doubt.
+function syncClaudeTitle(terminalId: string, name: string): void {
+  if (!/claude/i.test(foreground(terminalId))) return
+  if (CLAUDE_BUSY_RE.test(recentOutput(terminalId))) return
+  // eslint-disable-next-line no-control-regex
+  const clean = name.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)
+  if (clean) writeTerm(terminalId, `/rename ${clean}\r`)
 }
 
 function registerIpc(): void {
@@ -602,9 +634,9 @@ function registerIpc(): void {
     const t = await addTerminal(sessionId, input || {})
     return { terminal: t, logPath: logPathFor(sessionId, t.id) }
   })
-  handle('terminal:rename', (sessionId: string, terminalId: string, name: string) =>
-    renameTerminal(sessionId, terminalId, name)
-  )
+  handle('terminal:rename', async (sessionId: string, terminalId: string, name: string) => {
+    if (await renameTerminal(sessionId, terminalId, name)) syncClaudeTitle(terminalId, name)
+  })
   handle('terminal:remove', (sessionId: string, terminalId: string) =>
     removeTerminal(sessionId, terminalId)
   )

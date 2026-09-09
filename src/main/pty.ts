@@ -337,6 +337,23 @@ export function isLive(id: string): boolean {
   return terms.has(id)
 }
 
+// Name of the pty's foreground process — "claude" while Claude Code is running,
+// the shell's name at a plain prompt.
+export function foreground(id: string): string {
+  try {
+    return terms.get(id)?.proc.process || ''
+  } catch {
+    return ''
+  }
+}
+
+// The most recently received output, ANSI-stripped — enough to tell whether
+// Claude is mid-work or sitting on a prompt that reads single keys.
+export function recentOutput(id: string): string {
+  const t = terms.get(id)
+  return t ? stripAnsi(t.recentRaw) : ''
+}
+
 // current output buffer + seq, for reattaching a view without losing scrollback
 export function snapshot(id: string): { buffer: string; seq: number } | null {
   const t = terms.get(id)
