@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.18
+
+**Added**
+- Renaming a terminal tab now renames the Claude conversation running in it. Archo sends the new name to that terminal as `/rename <name>`, so the conversation is titled after the tab in `/resume` instead of carrying a generated name (long names are cut to 60 characters). It only fires while Claude is the terminal's foreground process and sitting on its normal input box — nothing is typed at a shell prompt, nor while Claude is working or waiting on a permission prompt, where the keystrokes would answer that prompt instead. A rename box opened and closed unchanged sends nothing.
+
 ## 0.1.17
 
 **Fixed**
