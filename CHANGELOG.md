@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.19
+
+**Changed**
+- Terminal tabs no longer show the linked ticket key as a chip. The link itself is unchanged: the ticket and its live status still appear in the tab's edit popover and on the session in the sidebar.
+
 ## 0.1.18
 
 **Added**
