@@ -1079,7 +1079,6 @@ export default function SessionsView({
                   ) : (
                     <span className="term-tab-name">{t.name}</span>
                   )}
-                  {t.jiraKey && <span className="term-tab-key">{t.jiraKey}</span>}
                   {t.tags && t.tags.length > 0 && (
                     <span className="term-tab-tags">
                       {t.tags.map((tag) => (

@@ -3565,15 +3565,6 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.term-tab-key {
-  flex: 0 0 auto;
-  font-size: 9.5px;
-  font-family: var(--mono);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
 .tab-pop-ticket {
   display: flex;
   align-items: center;
