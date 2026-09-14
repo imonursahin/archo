@@ -22,9 +22,8 @@ buildSync({
   format: 'esm',
   outfile: out
 })
-const { publishAssistant, repoInfo, setRemote, cloneAssistant, gitBranch } = await import(
-  pathToFileURL(out).href
-)
+const { publishAssistant, repoInfo, setRemote, cloneAssistant, gitBranch, pushAssistant, pullAssistant } =
+  await import(pathToFileURL(out).href)
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'archo-git-'))
 // the code under test commits with the inherited environment, so pin git's
@@ -232,6 +231,96 @@ assert.ok(await fs.readFile(path.join(cloneTarget, 'CLAUDE.md'), 'utf8'), 'clone
 const src = await fs.readFile(path.join(root, 'src/main/git.ts'), 'utf8')
 assert.match(src, /\['clone',\s*'--',/, "the clone argv lost its '--' separator")
 
+// ------------------------------------------------------------- pushAssistant
+// the round trip against a local bare remote: what the working tree commits is
+// what the remote ends up holding, on the branch the work was done on
+const pushSrc = await newRepo('push-src')
+const pushRemote = path.join(tmp, 'push-origin.git')
+await pexec('git', ['init', '--bare', '-b', 'main', pushRemote])
+await fs.writeFile(path.join(pushSrc, 'CLAUDE.md'), 'pushed content')
+await raw(pushSrc, ['add', '-A'])
+await raw(pushSrc, ['commit', '-m', 'seed'])
+await setRemote(pushSrc, pushRemote)
+await pushAssistant(pushSrc)
+assert.strictEqual(
+  (await pexec('git', ['-C', pushRemote, 'show', 'main:CLAUDE.md'])).stdout,
+  'pushed content',
+  'the commit never reached the remote'
+)
+// -u, so the branch comes back with an upstream and repoInfo reads ahead 0
+assert.strictEqual((await repoInfo(pushSrc)).ahead, 0, 'push -u must set the upstream')
+
+// the branch is resolved, not assumed: work on a non-main branch lands on that
+// branch at the remote and leaves main where it was
+await raw(pushSrc, ['checkout', '-b', 'feature'])
+await fs.writeFile(path.join(pushSrc, 'CLAUDE.md'), 'on a feature branch')
+await raw(pushSrc, ['commit', '-am', 'feature work'])
+await pushAssistant(pushSrc)
+assert.strictEqual(
+  (await pexec('git', ['-C', pushRemote, 'show', 'feature:CLAUDE.md'])).stdout,
+  'on a feature branch',
+  'the resolved branch name is not the branch that was pushed'
+)
+assert.strictEqual(
+  (await pexec('git', ['-C', pushRemote, 'show', 'main:CLAUDE.md'])).stdout,
+  'pushed content',
+  'pushing a feature branch must not move main'
+)
+
+// rev-parse --abbrev-ref on an unborn HEAD answers the literal string 'HEAD',
+// which is not a branch name — publishAssistant uses symbolic-ref for exactly
+// this case, pushAssistant does not. Pin the behaviour so the difference is
+// visible rather than discovered as a push of a detached ref.
+const unbornPush = await newRepo('push-unborn')
+await setRemote(unbornPush, pushRemote)
+// git exits non-zero here but still prints the literal name on stdout
+const abbrev = await raw(unbornPush, ['rev-parse', '--abbrev-ref', 'HEAD']).catch((e) => e.stdout)
+assert.strictEqual(
+  String(abbrev).trim(),
+  'HEAD',
+  'precondition: an unborn HEAD abbreviates to the literal HEAD'
+)
+await assert.rejects(
+  () => pushAssistant(unbornPush),
+  'pushing an unborn HEAD must fail loudly rather than push a literal HEAD ref'
+)
+
+// ------------------------------------------------------------- pullAssistant
+// a fast-forward applies
+const pullClone = path.join(tmp, 'pull-clone')
+await cloneAssistant(pushRemote, pullClone)
+await raw(pullClone, ['checkout', 'main'])
+await raw(pushSrc, ['checkout', 'main'])
+await fs.writeFile(path.join(pushSrc, 'CLAUDE.md'), 'newer upstream content')
+await raw(pushSrc, ['commit', '-am', 'upstream moves'])
+await pushAssistant(pushSrc)
+await pullAssistant(pullClone)
+assert.strictEqual(
+  await fs.readFile(path.join(pullClone, 'CLAUDE.md'), 'utf8'),
+  'newer upstream content',
+  'a fast-forward pull did not bring the upstream commit down'
+)
+
+// a diverged history is rejected, not merged: --ff-only must refuse rather than
+// write a merge commit into an assistant the user did not ask to merge
+await fs.writeFile(path.join(pullClone, 'CLAUDE.md'), 'local divergence')
+await raw(pullClone, ['commit', '-am', 'local work'])
+await fs.writeFile(path.join(pushSrc, 'CLAUDE.md'), 'remote divergence')
+await raw(pushSrc, ['commit', '-am', 'remote work'])
+await pushAssistant(pushSrc)
+const beforePull = (await raw(pullClone, ['rev-parse', 'HEAD'])).trim()
+await assert.rejects(() => pullAssistant(pullClone), 'a diverged history must not fast-forward')
+assert.strictEqual(
+  (await raw(pullClone, ['rev-parse', 'HEAD'])).trim(),
+  beforePull,
+  '--ff-only rejected but still moved HEAD'
+)
+assert.strictEqual(
+  await fs.readFile(path.join(pullClone, 'CLAUDE.md'), 'utf8'),
+  'local divergence',
+  'a rejected pull must leave the local work tree alone'
+)
+
 // ------------------------------------------------------------ the git helper
 // launched from Finder the app inherits a bare PATH; every git call goes
 // through withPath, so a stripped PATH must still resolve git
@@ -244,6 +333,19 @@ try {
 } finally {
   process.env.PATH = savedPath
 }
+
+// the same bare PATH, but through clone — cloning is reached from the same
+// Finder-launched process, so it needs the same PATH floor the helper applies
+try {
+  process.env.PATH = ''
+  await cloneAssistant(bare, path.join(tmp, 'cloned-bare-path'))
+} finally {
+  process.env.PATH = savedPath
+}
+assert.ok(
+  await fs.readFile(path.join(tmp, 'cloned-bare-path', 'CLAUDE.md'), 'utf8'),
+  'clone produced no work tree with a stripped PATH'
+)
 
 await fs.rm(tmp, { recursive: true, force: true })
 await fs.rm(out, { force: true })

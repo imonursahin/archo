@@ -279,7 +279,8 @@ export async function cloneAssistant(
 ): Promise<void> {
   const safe = assertRepoUrl(url)
   await pexec('git', ['clone', '--', safe, targetDir], {
-    env: env || process.env,
+    // same PATH floor as every other git call — this one does not go through git()
+    env: withPath(env || process.env),
     maxBuffer: 1024 * 1024 * 32
   })
 }

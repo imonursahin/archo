@@ -52,7 +52,18 @@ buildSync({
   outfile: out,
   alias: { 'node-pty': ptyStub, electron: electronStub }
 })
-const { createTerm, killTerm, liveTermIds, isLive } = await import(pathToFileURL(out).href)
+const {
+  createTerm,
+  killTerm,
+  liveTermIds,
+  isLive,
+  writeTerm,
+  resizeTerm,
+  foreground,
+  recentOutput,
+  snapshot,
+  killAll
+} = await import(pathToFileURL(out).href)
 
 const fakeWin = { webContents: { send() {} }, isDestroyed: () => false }
 const spawns = () => globalThis.__spawns
@@ -158,6 +169,50 @@ assert.deepStrictEqual(liveTermIds(), ['again'])
 killTerm('again')
 assert.deepStrictEqual(liveTermIds(), [])
 
+// ============================================ accessors for a terminal that is gone
+// Every one of these is called from an ipc handler holding an id the renderer
+// remembered. A terminal can exit between the render and the click, so a stale
+// id is ordinary, not exceptional: each must answer emptily rather than throw a
+// rejection into the renderer.
+assert.deepStrictEqual(liveTermIds(), [], 'precondition: nothing is live')
+assert.strictEqual(foreground('gone'), '', 'foreground of a dead id is empty')
+assert.strictEqual(recentOutput('gone'), '', 'recentOutput of a dead id is empty')
+assert.strictEqual(snapshot('gone'), null, 'snapshot of a dead id is null, not an empty buffer')
+assert.doesNotThrow(() => writeTerm('gone', 'ls\n'), 'writing to a dead id must not throw')
+assert.doesNotThrow(() => resizeTerm('gone', 80, 24), 'resizing a dead id must not throw')
+assert.doesNotThrow(() => killTerm('gone'), 'killing a dead id must not throw')
+
+// ======================================================= accessors while live
+createTerm(fakeWin, 'acc', { cwd: tmp })
+// snapshot is what a reattaching view restores from — it must be a real buffer
+// plus the sequence number that view resumes at, never null for a live terminal
+const snap = snapshot('acc')
+assert.notStrictEqual(snap, null, 'a live terminal must have a snapshot')
+assert.strictEqual(typeof snap.buffer, 'string', 'the snapshot carries the output buffer')
+assert.strictEqual(typeof snap.seq, 'number', 'the snapshot carries the resume sequence')
+// foreground and recentOutput drive the idle indicator: both must stay strings,
+// so a missing value reads as "nothing running" rather than crashing the poll
+assert.strictEqual(typeof foreground('acc'), 'string')
+assert.strictEqual(typeof recentOutput('acc'), 'string')
+assert.doesNotThrow(() => writeTerm('acc', 'echo hi\n'))
+assert.doesNotThrow(() => resizeTerm('acc', 120, 40))
+
+// a killed terminal stops answering, or a reattach would restore a dead session
+killTerm('acc')
+assert.strictEqual(snapshot('acc'), null, 'a killed terminal keeps no snapshot')
+assert.strictEqual(foreground('acc'), '')
+
+// ===================================================================== killAll
+// quitting the app runs this; anything left behind is an orphaned pty and an
+// open recording stream
+createTerm(fakeWin, 'a1', { cwd: tmp })
+createTerm(fakeWin, 'a2', { cwd: tmp })
+assert.strictEqual(liveTermIds().length, 2, 'precondition: two live terminals')
+killAll()
+assert.deepStrictEqual(liveTermIds(), [], 'killAll must leave nothing live')
+assert.strictEqual(isLive('a1'), false)
+assert.doesNotThrow(() => killAll(), 'killAll with nothing live must not throw')
+
 await fs.rm(tmp, { recursive: true, force: true })
-console.log('ok — terminal spawn shape and live-terminal list')
+console.log('ok — terminal spawn shape, live-terminal list and session accessors')
 process.exit(0) // the module's busy-watch interval keeps the loop alive otherwise
