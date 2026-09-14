@@ -17,7 +17,7 @@
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder --publish never",
     "release": "electron-vite build && electron-builder --publish always",
-    "check": "node scripts/check-export.mjs && node scripts/check-publish-ignore.mjs",
+    "check": "node scripts/check-all.mjs",
     "ship": "bash scripts/release.sh",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
