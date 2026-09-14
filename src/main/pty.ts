@@ -3,6 +3,7 @@ import os from 'os'
 import { createWriteStream, existsSync, statSync, mkdirSync, WriteStream } from 'fs'
 import path from 'path'
 import { BrowserWindow } from 'electron'
+import { withPath } from './shellenv'
 
 function safeCwd(cwd?: string): string {
   try {
@@ -130,7 +131,18 @@ function ensureIdleWatch(): void {
   }, 500)
 }
 
-const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : 'zsh')
+const isWin = process.platform === 'win32'
+// PowerShell, not COMSPEC: the argument shape below is PowerShell's
+const shell = isWin
+  ? 'powershell.exe'
+  : process.env.SHELL || (existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/bash')
+
+// An interactive shell, optionally running one command first and staying open.
+// PowerShell speaks neither -i nor -c, and `exec` is POSIX-only.
+function shellArgs(command?: string): string[] {
+  if (isWin) return command ? ['-NoExit', '-Command', command] : ['-NoLogo']
+  return command ? ['-i', '-c', `${command}; exec ${shell} -i`] : ['-i']
+}
 
 // If Agent Studio was itself launched from inside a Claude Code session, these
 // markers leak into spawned terminals and make a nested `claude` misbehave
@@ -163,20 +175,7 @@ function cleanEnv(): Record<string, string> {
   // We spawn an interactive (not login) shell for speed, so login-only PATH
   // entries (e.g. Homebrew from .zprofile) may be missing when the app is
   // launched from Finder. Guarantee a sane PATH floor so brew/claude resolve.
-  const home = process.env.HOME || ''
-  const floor = [
-    '/opt/homebrew/bin',
-    '/opt/homebrew/sbin',
-    '/usr/local/bin',
-    home && `${home}/.local/bin`,
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin'
-  ].filter(Boolean) as string[]
-  const existing = (env.PATH || '').split(':').filter(Boolean)
-  env.PATH = [...new Set([...existing, ...floor])].join(':')
-  return env
+  return withPath(env)
 }
 
 export function createTerm(
@@ -196,8 +195,7 @@ export function createTerm(
   // then drop into an interactive shell so the terminal stays usable after
   // interactive (not login) shell: sources ~/.zshrc once instead of the full
   // login chain, which on heavy dotfiles is dramatically faster to start
-  const args =
-    opts.silent && opts.command ? ['-i', '-c', `${opts.command}; exec ${shell} -i`] : ['-i']
+  const args = shellArgs(opts.silent && opts.command ? opts.command : undefined)
   // Generously wide/tall default: the real size only arrives a moment later
   // via ptyResize (once the renderer mounts xterm.js and measures the actual
   // container), and a TUI that paints its first frame before that lands
@@ -331,6 +329,11 @@ export function killTerm(id: string): void {
     t.rec?.end()
     terms.delete(id)
   }
+}
+
+// terminal ids with a live pty (and therefore an open recording stream)
+export function liveTermIds(): string[] {
+  return [...terms.keys()]
 }
 
 export function isLive(id: string): boolean {

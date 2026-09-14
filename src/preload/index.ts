@@ -37,6 +37,10 @@ const api = {
     ipcRenderer.invoke('mcp:update', file, name, cfg),
   deleteMcpServer: (file: string, name: string) =>
     ipcRenderer.invoke('mcp:delete', file, name),
+  updateHookEvent: (file: string, event: string, matchers: unknown) =>
+    ipcRenderer.invoke('hook:update', file, event, matchers),
+  deleteHookEvent: (file: string, event: string) =>
+    ipcRenderer.invoke('hook:delete', file, event),
   setPluginEnabled: (id: string, key: string, enabled: boolean) =>
     ipcRenderer.invoke('plugin:setEnabled', id, key, enabled),
   setMcpEnabled: (id: string, name: string, enabled: boolean) =>
@@ -134,6 +138,20 @@ const api = {
   meetingsToday: () => ipcRenderer.invoke('tools:meetings'),
   jiraIssue: (key: string) => ipcRenderer.invoke('jira:issue', key),
   sessionJiraBindings: () => ipcRenderer.invoke('sessions:jiraBindings'),
+  runDoctor: () => ipcRenderer.invoke('doctor:run'),
+  listPlugins: (id: string) => ipcRenderer.invoke('plugins:list', id),
+  listMarketplaces: (id: string) => ipcRenderer.invoke('plugins:marketplaces', id),
+  pluginAction: (id: string, action: string, arg: string) =>
+    ipcRenderer.invoke('plugins:action', id, action, arg),
+  shareInfo: (id: string) => ipcRenderer.invoke('share:info', id),
+  sharePublish: (id: string, message: string) =>
+    ipcRenderer.invoke('share:publish', id, message),
+  shareSetRemote: (id: string, url: string) => ipcRenderer.invoke('share:setRemote', id, url),
+  sharePush: (id: string) => ipcRenderer.invoke('share:push', id),
+  sharePull: (id: string) => ipcRenderer.invoke('share:pull', id),
+  shareClone: (url: string) => ipcRenderer.invoke('share:clone', url),
+  logStats: () => ipcRenderer.invoke('logs:stats'),
+  pruneLogs: (days: number) => ipcRenderer.invoke('logs:prune', days),
   getGoogleConfig: () => ipcRenderer.invoke('google:getConfig'),
   connectGoogle: (input: { clientId: string; clientSecret: string }) =>
     ipcRenderer.invoke('google:connect', input),

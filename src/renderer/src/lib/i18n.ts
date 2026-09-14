@@ -292,7 +292,11 @@ const DICT: Record<string, { en: string; tr: string }> = {
   scopeProject: { en: 'project', tr: 'proje' },
   toastDuplicated: { en: '"{name}" duplicated', tr: '"{name}" çoğaltıldı' },
   toastImported: { en: '"{name}" imported with all settings', tr: '"{name}" tüm ayarlarıyla içe aktarıldı' },
-  toastExported: { en: '"{name}" exported with all settings', tr: '"{name}" tüm ayarlarıyla dışa aktarıldı' },
+  toastExported: { en: '"{name}" exported — {n} files', tr: '"{name}" dışa aktarıldı — {n} dosya' },
+  toastExportDropped: {
+    en: '{n} file(s) left out (binary or over 512KB), e.g. {first}',
+    tr: '{n} dosya pakete girmedi (binary ya da 512KB üstü), örn. {first}'
+  },
   confirmDeleteAssistant: {
     en: 'Delete "{name}"?\n\nAll of the assistant\'s files ({dir}) will be permanently removed from disk. This cannot be undone.',
     tr: '"{name}" silinsin mi?\n\nAsistanın tüm dosyaları ({dir}) kalıcı olarak diskten silinecek. Bu geri alınamaz.'
@@ -384,7 +388,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   savedPrompts: { en: 'Saved prompts — send to the active terminal', tr: 'Kaydedilmiş promptlar — aktif terminale gönder' },
   newPlus: { en: '＋ New', tr: '＋ Yeni' },
   titlePlaceholder: { en: 'Title', tr: 'Başlık' },
-  promptTextPlaceholder: { en: 'Prompt text…', tr: 'Prompt metni…' },
+  promptTextPlaceholder: { en: 'Prompt text… use {{name}} for a variable', tr: 'Prompt metni… değişken için {{ad}} yaz' },
+  fillVarsFor: { en: 'Fill in "{name}"', tr: '"{name}" için değerleri gir' },
   discard: { en: 'Discard', tr: 'Vazgeç' },
   send: { en: 'send', tr: 'gönder' },
   toastOpenTerminalFirst: { en: 'Open a terminal first', tr: 'Önce bir terminal aç' },
@@ -393,6 +398,129 @@ const DICT: Record<string, { en: string; tr: string }> = {
   toastBridgeLinked: { en: 'Assistant linked to this repo ({n} items)', tr: 'Asistan bu repoya bağlandı ({n} öğe)' },
   toastBridgeFailed: { en: 'Could not create bridge', tr: 'Köprü kurulamadı' },
   toastPromptSent: { en: '"{name}" sent', tr: '"{name}" gönderildi' },
+
+  pluginsManage: { en: 'manage plugins', tr: 'pluginleri yönet' },
+  pluginsTitle: { en: 'Plugins — {name}', tr: 'Pluginler — {name}' },
+  pluginsInstalled: { en: 'Installed ({n})', tr: 'Kurulu ({n})' },
+  pluginsAvailable: { en: 'Available ({n})', tr: 'Kurulabilir ({n})' },
+  pluginsMarkets: { en: 'Marketplaces ({n})', tr: 'Marketplaceler ({n})' },
+  pluginsLoading: { en: 'Asking the claude CLI…', tr: 'claude CLI sorgulanıyor…' },
+  pluginsSearch: { en: 'Filter by name…', tr: 'İsme göre süz…' },
+  pluginsNone: { en: 'Nothing here', tr: 'Burada bir şey yok' },
+  pluginInstall: { en: 'install', tr: 'kur' },
+  pluginEnable: { en: 'enable', tr: 'aç' },
+  pluginDisable: { en: 'disable', tr: 'kapat' },
+  pluginUpdate: { en: 'update', tr: 'güncelle' },
+  pluginInstalled: { en: 'Plugin installed — restart Claude to load it', tr: 'Plugin kuruldu — yüklenmesi için Claude yeniden başlamalı' },
+  pluginUninstalled: { en: 'Plugin removed', tr: 'Plugin kaldırıldı' },
+  pluginEnabled: { en: 'Plugin enabled', tr: 'Plugin açıldı' },
+  pluginDisabled: { en: 'Plugin disabled', tr: 'Plugin kapatıldı' },
+  pluginUpdated: { en: 'Plugin updated — restart Claude to apply', tr: 'Plugin güncellendi — uygulanması için Claude yeniden başlamalı' },
+  confirmUninstallPlugin: { en: 'Uninstall "{name}"?', tr: '"{name}" kaldırılsın mı?' },
+  confirmRemoveMarket: { en: 'Remove marketplace "{name}"?', tr: '"{name}" marketplace\'i kaldırılsın mı?' },
+  marketAdd: { en: 'Add a marketplace', tr: 'Marketplace ekle' },
+  marketAdded: { en: 'Marketplace added', tr: 'Marketplace eklendi' },
+  marketRemoved: { en: 'Marketplace removed', tr: 'Marketplace kaldırıldı' },
+  marketUpdated: { en: 'Marketplace updated', tr: 'Marketplace güncellendi' },
+  add: { en: 'Add', tr: 'Ekle' },
+  shareAssistant: { en: 'Share with git', tr: "Git ile paylaş" },
+  cloneAssistant: { en: 'Clone an assistant from git', tr: "Git'ten assistant klonla" },
+  clone: { en: 'Clone', tr: 'Klonla' },
+  clonePrompt: {
+    en: 'Repository URL of the assistant to clone:',
+    tr: 'Klonlanacak assistant repo adresi:'
+  },
+  shareTitle: { en: 'Share "{name}"', tr: '"{name}" paylaşımı' },
+  shareSub: {
+    en: 'The assistant folder becomes a git repo. Local permissions, logs and the MCP config (it can hold API keys) stay out.',
+    tr: 'Assistant klasörü bir git repo olur. Lokal izinler, loglar ve MCP config (API key tutabiliyor) dışarıda kalır.'
+  },
+  shareNotRepo: { en: 'not a git repo yet', tr: 'henüz git repo değil' },
+  shareClean: { en: 'nothing to commit', tr: "commit'lenecek bir şey yok" },
+  shareDirty: { en: 'uncommitted changes', tr: "commit'lenmemiş değişiklik var" },
+  shareAhead: { en: '{n} commits not pushed', tr: '{n} commit push edilmemiş' },
+  shareCommitMsg: { en: 'Commit message', tr: 'Commit mesajı' },
+  shareRemote: { en: 'Remote (origin)', tr: 'Remote (origin)' },
+  sharePublish: { en: 'Commit', tr: "Commit'le" },
+  sharePush: { en: 'Push', tr: 'Push' },
+  sharePull: { en: 'Pull', tr: 'Pull' },
+  toastPublished: { en: 'Committed', tr: "Commit'lendi" },
+  toastNothingToCommit: { en: 'Nothing changed', tr: 'Değişen bir şey yok' },
+  toastRemoteSet: { en: 'Remote set', tr: 'Remote ayarlandı' },
+  toastPushed: { en: 'Pushed', tr: 'Push edildi' },
+  toastPulled: { en: 'Pulled', tr: 'Pull edildi' },
+  toastCloned: { en: '"{name}" cloned', tr: '"{name}" klonlandı' },
+  toastCloneFailed: { en: 'Clone failed', tr: 'Klonlama başarısız' },
+  hookEmpty: { en: 'No matchers yet for this event', tr: 'Bu event için henüz matcher yok' },
+  hookMatcherPh: {
+    en: 'matcher — e.g. Bash, Edit|Write, * for all',
+    tr: 'matcher — ör. Bash, Edit|Write, hepsi için *'
+  },
+  hookCommandPh: { en: 'shell command to run', tr: 'çalıştırılacak shell komutu' },
+  hookTimeoutPh: { en: 'timeout (s)', tr: 'timeout (sn)' },
+  hookRemoveCommand: { en: 'remove', tr: 'sil' },
+  hookAddCommand: { en: '＋ command', tr: '＋ komut' },
+  hookAddMatcher: { en: '＋ matcher', tr: '＋ matcher' },
+  hookDeleteEvent: { en: 'Delete event', tr: "Event'i sil" },
+  hookMustBeArray: {
+    en: 'a hook event must be a list of matchers',
+    tr: 'bir hook event matcher listesi olmalı'
+  },
+  hookLocalNote: {
+    en: 'This event lives in settings.local.json — your machine only, not shared',
+    tr: 'Bu event settings.local.json içinde — sadece bu makinede, paylaşılmaz'
+  },
+  hookUnknownEvent: {
+    en: '"{name}" is not an event Archo knows — check the spelling',
+    tr: '"{name}" Archo\'nun bildiği bir event değil — yazımını kontrol et'
+  },
+  confirmDeleteHook: {
+    en: 'Delete the "{name}" hook event from this settings file?',
+    tr: '"{name}" hook event\'i bu settings dosyasından silinsin mi?'
+  },
+  tabDoctor: { en: 'Doctor', tr: 'Doctor' },
+  doctorHint: {
+    en: 'What Archo needs on this machine, and whether it is there',
+    tr: "Archo'nun bu makinede ihtiyaç duyduğu şeyler ve durumları"
+  },
+  doctorRun: { en: 'Re-check', tr: 'Yeniden kontrol et' },
+  doctorRunning: { en: 'Checking…', tr: 'Kontrol ediliyor…' },
+  diskUsage: { en: 'Terminal recordings', tr: 'Terminal kayıtları' },
+  logsSummary: { en: '{n} files, up to {days} days old', tr: '{n} dosya, en eskisi {days} günlük' },
+  logsOrphan: { en: '{size} belongs to deleted sessions', tr: '{size} silinmiş oturumlara ait' },
+  pruneOlder30: { en: 'Clear older than 30 days', tr: "30 günden eskiyi sil" },
+  pruneOlder7: { en: 'Clear older than 7 days', tr: '7 günden eskiyi sil' },
+  pruneAll: { en: 'Clear all', tr: 'Hepsini sil' },
+  confirmPruneAll: {
+    en: 'Delete every terminal recording? Open terminals lose their scrollback.',
+    tr: 'Bütün terminal kayıtları silinsin mi? Açık terminaller scrollback geçmişini kaybeder.'
+  },
+  toastLogsPruned: { en: '{n} files deleted — {size} freed', tr: '{n} dosya silindi — {size} boşaldı' },
+
+  lintNoFrontmatter: {
+    en: 'No frontmatter — Claude Code will never load this {kind}',
+    tr: 'Frontmatter yok — Claude Code bu {kind} kaydını hiç yüklemez'
+  },
+  lintNoName: {
+    en: 'name is missing — this resource cannot be referenced',
+    tr: 'name alanı yok — bu kayıt hiçbir yerden çağrılamaz'
+  },
+  lintNameShape: {
+    en: '"{name}" should be lowercase kebab-case (letters, digits, dashes)',
+    tr: '"{name}" küçük harf kebab-case olmalı (harf, rakam, tire)'
+  },
+  lintNameMismatch: {
+    en: 'name "{name}" does not match its folder/file "{expected}"',
+    tr: 'name "{name}", klasör/dosya adı "{expected}" ile uyuşmuyor'
+  },
+  lintNoDesc: {
+    en: 'description is missing — nothing tells Claude when to use this',
+    tr: 'description yok — Claude bunu ne zaman kullanacağını bilemez'
+  },
+  lintDescShort: {
+    en: 'description is very short — say when to use this, not just what it is',
+    tr: 'description çok kısa — ne olduğunu değil, ne zaman kullanılacağını yaz'
+  },
 
   // Editor
   pickResource: { en: 'Pick a resource', tr: 'Bir kaynak seç' },
@@ -426,7 +554,6 @@ const DICT: Record<string, { en: string; tr: string }> = {
   command: { en: 'Command', tr: 'Komut' },
   source: { en: 'Source', tr: 'Kaynak' },
   mcpConnecting: { en: '⏳ Connecting…', tr: '⏳ Bağlanıyor…' },
-  mcpReconnect: { en: '↻ Reconnect', tr: '↻ Yeniden bağlan' },
   mcpTestConnect: { en: '▶ Test / Connect', tr: '▶ Test et / Bağlan' },
   mcpConnected: { en: '● Connected', tr: '● Bağlı' },
   mcpErrorDot: { en: '● Error', tr: '● Hata' },

@@ -4,10 +4,11 @@ import os from 'os'
 import path from 'path'
 import { parseFrontmatter, safeReadDir, readJson, walkForFile } from './fsutil'
 import { ENGINES, getEngine, type EngineDef } from './engines'
+import { projectSlug } from './shellenv'
 
 const HOME = os.homedir()
 // Assistants live in a visible, runnable location.
-const ASSISTANTS_ROOT = path.join(HOME, 'AgentStudio', 'assistants')
+export const ASSISTANTS_ROOT = path.join(HOME, 'AgentStudio', 'assistants')
 // Claude plugins are global, installed under the marketplaces dir.
 const PLUGINS_DIR = path.join(HOME, '.claude', 'plugins', 'marketplaces')
 
@@ -122,10 +123,13 @@ export interface AssistantBundle {
   icon: string
   engineId: string
   files: Record<string, string> // relative path -> text content
+  dropped?: string[] // files left behind, so the bundle says what did not travel
 }
 
-const BUNDLE_SKIP = /(^|\/)(node_modules|\.git|\.DS_Store)(\/|$)/
+const BUNDLE_SKIP =
+  /(^|\/)(node_modules|\.git|\.DS_Store|\.env(\.[^/]+)?)(\/|$)|(^|\/)\.claude\/(logs|settings\.local\.json)(\/|$)/
 const MAX_BUNDLE_FILE = 512 * 1024 // 512KB per file cap
+const MCP_FILE_NAME = '.mcp.json'
 
 // ---------- Skill bridge ----------
 // Make an assistant's skills/agents/commands available inside ANY working dir by
@@ -160,6 +164,23 @@ export async function bridgeStatus(targetDir: string): Promise<BridgeStatus> {
   }
 }
 
+// Windows only allows a plain symlink with Developer Mode or admin rights; a
+// directory junction needs neither.
+async function link(src: string, dst: string): Promise<void> {
+  if (process.platform !== 'win32') {
+    await fs.symlink(src, dst)
+    return
+  }
+  if ((await fs.stat(src)).isDirectory()) {
+    await fs.symlink(src, dst, 'junction')
+    return
+  }
+  // No hard-link fallback: unlinkSkills only removes symlinks, so a hard link
+  // would survive unbridging and keep sharing an inode with the assistant's own
+  // file. A file that cannot be symlinked is simply not bridged.
+  await fs.symlink(src, dst, 'file')
+}
+
 export async function linkSkills(
   id: string,
   targetDir: string
@@ -181,7 +202,7 @@ export async function linkSkills(
       const dst = path.join(dstDir, entry)
       if (existsSync(dst)) continue
       try {
-        await fs.symlink(src, dst)
+        await link(src, dst)
         linked.push(`.claude/${kind}/${entry}`)
       } catch {
         /* ignore */
@@ -196,7 +217,7 @@ export async function linkSkills(
     if (existsSync(dstPath)) continue // repo's own config wins
     try {
       await fs.mkdir(path.dirname(dstPath), { recursive: true })
-      await fs.symlink(srcPath, dstPath)
+      await link(srcPath, dstPath)
       linked.push(dst)
     } catch {
       /* ignore */
@@ -237,45 +258,116 @@ export async function unlinkSkills(targetDir: string): Promise<{ ok: boolean }> 
   return { ok: true }
 }
 
-async function collectFiles(dir: string, rel = ''): Promise<Record<string, string>> {
-  const out: Record<string, string> = {}
+interface Collected {
+  files: Record<string, string>
+  dropped: string[]
+}
+
+async function collectFiles(dir: string, rel = '', out?: Collected): Promise<Collected> {
+  const acc: Collected = out || { files: {}, dropped: [] }
   let entries: import('fs').Dirent[] = []
   try {
     entries = await fs.readdir(dir, { withFileTypes: true })
   } catch {
-    return out
+    return acc
   }
   for (const e of entries) {
     const relPath = rel ? `${rel}/${e.name}` : e.name
     if (BUNDLE_SKIP.test(relPath)) continue
     const abs = path.join(dir, e.name)
     if (e.isDirectory()) {
-      Object.assign(out, await collectFiles(abs, relPath))
+      await collectFiles(abs, relPath, acc)
     } else if (e.isFile()) {
       try {
         const stat = await fs.stat(abs)
-        if (stat.size > MAX_BUNDLE_FILE) continue
-        out[relPath] = await fs.readFile(abs, 'utf8')
+        if (stat.size > MAX_BUNDLE_FILE) {
+          acc.dropped.push(relPath)
+          continue
+        }
+        const buf = await fs.readFile(abs)
+        // a bundle carries text only — binary would be mangled by the utf8 round-trip
+        if (buf.includes(0)) acc.dropped.push(relPath)
+        else acc.files[relPath] = buf.toString('utf8')
       } catch {
-        /* skip unreadable/binary */
+        acc.dropped.push(relPath)
       }
     }
   }
-  return out
+  return acc
+}
+
+// An MCP server's `env` block holds its API keys. The bundle is meant to be
+// handed to someone else, so the server list travels but every value is blanked
+// — the receiver sees which keys to fill in, not what yours are.
+function stripMcpSecrets(files: Record<string, string>): void {
+  for (const [rel, text] of Object.entries(files)) {
+    if (path.basename(rel) !== MCP_FILE_NAME) continue
+    let json: Record<string, Record<string, { env?: Record<string, string> }>>
+    try {
+      json = JSON.parse(text)
+    } catch {
+      continue
+    }
+    let touched = false
+    for (const server of Object.values(json?.mcpServers || {})) {
+      for (const key of Object.keys(server?.env || {})) {
+        server.env![key] = ''
+        touched = true
+      }
+    }
+    if (touched) files[rel] = JSON.stringify(json, null, 2)
+  }
 }
 
 export async function exportAssistant(id: string): Promise<AssistantBundle | null> {
   const r = await resolve(id)
   if (!r) return null
   const { a } = r
+  const { files, dropped } = await collectFiles(a.baseDir)
+  stripMcpSecrets(files)
   return {
     format: 'agent-studio/assistant',
     version: 1,
     name: a.name,
     icon: a.icon,
     engineId: a.engineId,
-    files: await collectFiles(a.baseDir)
+    files,
+    dropped
   }
+}
+
+// Adopt a folder that already exists on disk (a git clone, a manual copy) as an
+// assistant. The folder is left exactly as it is — only the registry changes.
+export async function registerAssistant(
+  baseDir: string,
+  name?: string,
+  engineId?: string
+): Promise<Assistant> {
+  const list = await loadStore()
+  const already = list.find((x) => x.baseDir === baseDir)
+  if (already) return already
+  const engine =
+    (engineId && ENGINES.find((e) => e.id === engineId)) ||
+    ENGINES.find((e) => e.settingsFile && existsSync(path.join(baseDir, path.dirname(e.settingsFile)))) ||
+    getEngine('claude')
+  let base = name || path.basename(baseDir)
+  let slug = slugify(base)
+  if (list.some((x) => x.id === slug)) {
+    let n = 2
+    while (list.some((x) => x.id === `${slug}-${n}`)) n++
+    slug = `${slug}-${n}`
+    base = `${base} (${n})`
+  }
+  const assistant: Assistant = {
+    id: slug,
+    name: base,
+    icon: engine.icon,
+    engineId: engine.id,
+    baseDir,
+    createdAt: Date.now()
+  }
+  await saveStore([...list, assistant])
+  return assistant
 }
 
 export async function importAssistant(bundle: AssistantBundle): Promise<Assistant> {
@@ -547,7 +639,7 @@ async function collectInstruction(baseDir: string, e: EngineDef): Promise<Resour
 // Claude loads every session, so it's pinned to the top of the list.
 async function collectMemories(baseDir: string, e: EngineDef): Promise<ResourceItem[]> {
   if (e.id !== 'claude') return []
-  const dir = path.join(HOME, '.claude', 'projects', baseDir.replace(/[/.]/g, '-'), 'memory')
+  const dir = path.join(HOME, '.claude', 'projects', projectSlug(baseDir), 'memory')
   const items: ResourceItem[] = []
   for (const entry of await safeReadDir(dir)) {
     if (!entry.endsWith('.md')) continue
@@ -789,12 +881,38 @@ export async function duplicateResourceFile(file: string): Promise<{ path: strin
   return { path: target }
 }
 
+// readJson answers null for a missing file AND for a malformed one. A key-by-key
+// writer must tell those apart: treating malformed as empty would replace the
+// file's other settings with just the key being written.
+async function readJsonStrict(file: string): Promise<Record<string, any> | null> {
+  const json = await readJson(file)
+  if (json === null && existsSync(file)) throw new Error(`${path.basename(file)} is not valid JSON`)
+  return json
+}
+
+// One hook EVENT (PreToolUse, Stop, …) inside a settings.json. Written key by key
+// so the rest of the file — permissions, model, env — is never touched.
+export async function updateHookEvent(file: string, event: string, matchers: unknown): Promise<void> {
+  const json = (await readJsonStrict(file)) || {}
+  if (!json.hooks) json.hooks = {}
+  json.hooks[event] = matchers
+  await writeJsonAtomic(file, json)
+}
+
+export async function deleteHookEvent(file: string, event: string): Promise<void> {
+  const json = await readJsonStrict(file)
+  if (!json?.hooks) return
+  delete json.hooks[event]
+  if (Object.keys(json.hooks).length === 0) delete json.hooks
+  await writeJsonAtomic(file, json)
+}
+
 // update (or add) a single MCP server entry inside an .mcp.json-style file
 export async function updateMcpServer(file: string, name: string, cfg: unknown): Promise<void> {
-  const json = (await readJson(file)) || {}
+  const json = (await readJsonStrict(file)) || {}
   if (!json.mcpServers) json.mcpServers = {}
   json.mcpServers[name] = cfg
-  await fs.writeFile(file, JSON.stringify(json, null, 2), 'utf8')
+  await writeJsonAtomic(file, json)
 }
 
 // remove every trace of an MCP server: the .mcp.json entry AND all references

@@ -23,6 +23,17 @@ interface Props {
 }
 
 type Panel = 'files' | 'prompts' | null
+const PROMPT_VAR_RE = /\{\{\s*([\w.-]+)\s*\}\}/g
+
+function promptVars(text: string): string[] {
+  const seen: string[] = []
+  for (const m of text.matchAll(PROMPT_VAR_RE)) if (!seen.includes(m[1])) seen.push(m[1])
+  return seen
+}
+function fillVars(text: string, values: Record<string, string>): string {
+  return text.replace(PROMPT_VAR_RE, (whole, name) => values[name] ?? whole)
+}
+
 interface FileEntry {
   key: string
   label: string // shown text (relative path)
@@ -47,6 +58,11 @@ export default function SessionTools({
   const [fileQuery, setFileQuery] = useState('')
   const [prompts, setPrompts] = useState<SavedPrompt[]>(getPrompts())
   const [editing, setEditing] = useState<SavedPrompt | null>(null)
+  const [filling, setFilling] = useState<{
+    prompt: SavedPrompt
+    vars: string[]
+    values: Record<string, string>
+  } | null>(null)
   const [showRecent, setShowRecent] = useState(false)
   const [, setRecentTick] = useState(0)
   const [branch, setBranch] = useState<{ isRepo: boolean; branch?: string; dirty?: boolean }>({
@@ -187,11 +203,27 @@ export default function SessionTools({
 
   // ---- prompt library ----
   function sendPrompt(p: SavedPrompt): void {
+    const vars = promptVars(p.text)
+    if (vars.length) {
+      if (!requireTerm()) return
+      setEditing(null)
+      setFilling({ prompt: p, vars, values: Object.fromEntries(vars.map((v) => [v, ''])) })
+      return
+    }
     inject(p.text)
     if (activeTerminalId) {
       toast(ti('toastPromptSent', { name: p.title }), 'success')
       setPanel(null)
     }
+  }
+  function sendFilled(): void {
+    if (!filling) return
+    inject(fillVars(filling.prompt.text, filling.values))
+    if (activeTerminalId) {
+      toast(ti('toastPromptSent', { name: filling.prompt.title }), 'success')
+      setPanel(null)
+    }
+    setFilling(null)
   }
   function savePrompt(): void {
     if (!editing) return
@@ -391,7 +423,10 @@ export default function SessionTools({
             <span>{t('savedPrompts')}</span>
             <button
               className="st-mini primary"
-              onClick={() => setEditing({ id: `p-${Date.now()}`, title: '', text: '' })}
+              onClick={() => {
+                setFilling(null)
+                setEditing({ id: `p-${Date.now()}`, title: '', text: '' })
+              }}
             >
               {t('newPlus')}
             </button>
@@ -418,6 +453,34 @@ export default function SessionTools({
               </div>
             </div>
           )}
+          {filling && (
+            <div className="st-prompt-edit">
+              <div className="st-fill-head">{ti('fillVarsFor', { name: filling.prompt.title })}</div>
+              {filling.vars.map((v, i) => (
+                <input
+                  key={v}
+                  autoFocus={i === 0}
+                  placeholder={v}
+                  value={filling.values[v]}
+                  onChange={(e) =>
+                    setFilling({ ...filling, values: { ...filling.values, [v]: e.target.value } })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') sendFilled()
+                    if (e.key === 'Escape') setFilling(null)
+                  }}
+                />
+              ))}
+              <div className="st-prompt-edit-foot">
+                <button className="st-mini primary" onClick={sendFilled}>
+                  {t('send')}
+                </button>
+                <button className="st-mini" onClick={() => setFilling(null)}>
+                  {t('discard')}
+                </button>
+              </div>
+            </div>
+          )}
           {prompts.map((p) => (
             <div key={p.id} className="st-prompt">
               <span className="st-prompt-title" onClick={() => sendPrompt(p)} title={p.text}>
@@ -426,7 +489,13 @@ export default function SessionTools({
               <button className="st-mini" onClick={() => sendPrompt(p)}>
                 {t('send')}
               </button>
-              <button className="st-mini" onClick={() => setEditing(p)}>
+              <button
+                className="st-mini"
+                onClick={() => {
+                  setFilling(null)
+                  setEditing(p)
+                }}
+              >
                 ✎
               </button>
               <button

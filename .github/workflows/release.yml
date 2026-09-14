@@ -1,9 +1,9 @@
 name: Release
 
 # Fully automatic releases: bump "version" in package.json and push to master.
-# CI builds the macOS installers and publishes a GitHub Release. Commits that
-# don't change the version are ignored (the release for that version already
-# exists), so day-to-day pushes never trigger a build.
+# CI builds the installers for macOS, Windows and Linux and publishes one GitHub
+# Release. Commits that don't change the version are ignored (the release for
+# that version already exists), so day-to-day pushes never trigger a build.
 
 on:
   push:
@@ -15,8 +15,13 @@ permissions:
   contents: write # needed to create the release + tag
 
 jobs:
-  release:
-    runs-on: macos-latest # arm64 runner → arm64 build
+  # One gate for the whole matrix: decide once whether this version is new, and
+  # create the (draft-less) release up front so every platform job only uploads.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      v: ${{ steps.ver.outputs.v }}
+      exists: ${{ steps.check.outputs.exists }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +29,20 @@ jobs:
         id: ver
         run: echo "v=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      # Only a PUBLISHED release counts as done. A draft left behind by a failed
+      # build must not skip the rebuild — its assets are still missing.
       - name: Skip if this version was already released
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "v${{ steps.ver.outputs.v }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          DRAFT=$(gh release view "v${{ steps.ver.outputs.v }}" --repo "$GITHUB_REPOSITORY" --json isDraft -q .isDraft 2>/dev/null || echo "missing")
+          if [ "$DRAFT" = "false" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "v${{ steps.ver.outputs.v }} already released — skipping."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "draft-state: $DRAFT"
           fi
 
       - uses: actions/setup-node@v4
@@ -41,41 +50,95 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install deps (rebuilds node-pty for the runner)
+      - name: Run the self-checks
         if: steps.check.outputs.exists == 'false'
-        run: npm ci
+        run: npm ci --ignore-scripts && npm run check
 
-      - name: Build installers
-        if: steps.check.outputs.exists == 'false'
-        run: npm run dist # electron-builder without publish → dist/*.dmg, *.zip, latest-mac.yml
-
-      - name: Publish release
+      # Created as a DRAFT: nothing is visible to users (or to the in-app update
+      # check) until every platform's installer has been uploaded.
+      - name: Create the draft release
         if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VER="${{ steps.ver.outputs.v }}"
+          if gh release view "v$VER" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "draft v$VER already exists — reusing it"
+            exit 0
+          fi
           # Use the hand-written CHANGELOG.md section for this version as the
           # release notes; fall back to auto-generated notes if it's missing.
           awk -v v="$VER" 'index($0, "## " v)==1 {f=1; next} /^## /{f=0} f' CHANGELOG.md > /tmp/notes.md || true
           if [ -s /tmp/notes.md ]; then
-            gh release create "v$VER" \
-              dist/Archo-*-arm64.dmg dist/Archo-*-arm64-mac.zip dist/latest-mac.yml \
-              --repo "$GITHUB_REPOSITORY" --title "Archo $VER" --notes-file /tmp/notes.md
+            gh release create "v$VER" --repo "$GITHUB_REPOSITORY" --draft \
+              --title "Archo $VER" --notes-file /tmp/notes.md
           else
-            gh release create "v$VER" \
-              dist/Archo-*-arm64.dmg dist/Archo-*-arm64-mac.zip dist/latest-mac.yml \
-              --repo "$GITHUB_REPOSITORY" --title "Archo $VER" --generate-notes
+            gh release create "v$VER" --repo "$GITHUB_REPOSITORY" --draft \
+              --title "Archo $VER" --generate-notes
           fi
 
-      - name: Update Homebrew cask
-        if: steps.check.outputs.exists == 'false'
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'false'
+    strategy:
+      fail-fast: false # let every platform report, don't cancel siblings
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (rebuilds node-pty for the runner)
+        run: npm ci
+
+      - name: Build installers
+        run: npm run dist
+
+      - name: Upload installers to the release
+        shell: bash
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER="${{ needs.prepare.outputs.v }}"
+          # only the installable artifacts — not the unpacked build dirs.
+          # NUL-separated: electron-builder's default NSIS name has spaces
+          # ("Archo Setup 0.2.0.exe"), which word-splitting would tear apart.
+          find dist -maxdepth 1 -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' \
+               -o -name '*.deb' -o -name 'latest*.yml' \) -print0 \
+            | xargs -0 gh release upload "v$VER" --repo "$GITHUB_REPOSITORY" --clobber
+
+  # Every installer is in place — make the release visible. Until this runs the
+  # release is a draft, so a failed platform leg never ships a half-empty release.
+  publish:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Undraft the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${{ needs.prepare.outputs.v }}" --repo "$GITHUB_REPOSITORY" --draft=false
+
+  homebrew:
+    needs: [prepare, publish]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: macos-latest # the cask points at the macOS dmg
+    steps:
+      - name: Update Homebrew cask
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
         run: |
           set -e
-          VER="${{ steps.ver.outputs.v }}"
-          SHA=$(shasum -a 256 dist/Archo-${VER}-arm64.dmg | awk '{print $1}')
+          VER="${{ needs.prepare.outputs.v }}"
+          gh release download "v$VER" --repo "$GITHUB_REPOSITORY" \
+            --pattern "Archo-${VER}-arm64.dmg" --dir .
+          SHA=$(shasum -a 256 "Archo-${VER}-arm64.dmg" | awk '{print $1}')
           mkdir -p ~/.ssh
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519

@@ -186,6 +186,34 @@ export function setOrder(assistantId: string, group: string, paths: string[]): v
   localStorage.setItem(orderKey(assistantId, group), JSON.stringify(paths))
 }
 
+// Paths come from the main process, so they carry the platform's own separator.
+function isUnder(dir: string, p: string): boolean {
+  return p.startsWith(dir + '/') || p.startsWith(dir + '\\')
+}
+
+// A deleted file is gone from disk, so every reference the app still holds to it
+// is dead weight — favorites and the saved sidebar order both key on the path.
+export function forgetResource(assistantId: string, path: string): void {
+  const favs = getFavorites()
+  if (favs.delete(path)) localStorage.setItem(FAV_KEY, JSON.stringify([...favs]))
+  for (const group of GROUP_KEYS) {
+    const list = getOrder(assistantId, group)
+    // a deleted skill takes its whole folder, so drop anything under it too
+    const kept = list.filter((p) => p !== path && !isUnder(path, p))
+    if (kept.length !== list.length) setOrder(assistantId, group, kept)
+  }
+}
+
+// Same, for a whole assistant: its ordering, recent dirs and any favorite that
+// lived inside its folder.
+export function forgetAssistant(assistantId: string, baseDir: string): void {
+  for (const group of GROUP_KEYS) localStorage.removeItem(orderKey(assistantId, group))
+  localStorage.removeItem(`recentdirs:${assistantId}`)
+  const favs = getFavorites()
+  const kept = [...favs].filter((p) => !isUnder(baseDir, p))
+  if (kept.length !== favs.size) localStorage.setItem(FAV_KEY, JSON.stringify(kept))
+}
+
 // Sort items by the saved order; unknown (new) items keep their natural order at the end.
 export function applyOrder<T extends { path: string | null }>(
   items: T[],

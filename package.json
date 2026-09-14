@@ -3,7 +3,12 @@
   "version": "0.1.19",
   "description": "Visual control center for Claude Code — manage skills/agents/MCP and browse named terminal sessions",
   "main": "./out/main/index.js",
-  "author": "onur",
+  "author": "Onur Şahin <31903339+imonursahin@users.noreply.github.com>",
+  "homepage": "https://github.com/imonursahin/archo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imonursahin/archo.git"
+  },
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
@@ -12,6 +17,7 @@
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder --publish never",
     "release": "electron-vite build && electron-builder --publish always",
+    "check": "node scripts/check-export.mjs && node scripts/check-publish-ignore.mjs",
     "ship": "bash scripts/release.sh",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
@@ -45,6 +51,26 @@
         "zip"
       ]
     },
+    "win": {
+      "icon": "resources/icon.png",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "maintainer": "Onur Şahin <31903339+imonursahin@users.noreply.github.com>",
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
     "publish": [
       {
         "provider": "github",
@@ -70,6 +96,7 @@
     "electron": "^33.2.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
+    "esbuild": "^0.24.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.2",

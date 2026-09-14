@@ -9,7 +9,7 @@ interface Props {
   onChange: () => void // re-render the app in place (no reload)
 }
 
-type Tab = 'general' | 'prefs' | 'integrations'
+type Tab = 'general' | 'prefs' | 'integrations' | 'doctor'
 
 export default function SettingsModal({ onClose, onChange }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>('general')
@@ -55,7 +55,12 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
           >
             {t('tabIntegrations')}
           </button>
+          <button className={tab === 'doctor' ? 'active' : ''} onClick={() => setTab('doctor')}>
+            {t('tabDoctor')}
+          </button>
         </div>
+
+        {tab === 'doctor' && <DoctorPanel />}
 
         {tab === 'integrations' && (
           <div className="integrations">
@@ -93,6 +98,9 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
                 ☀ {t('light')}
               </button>
             </div>
+
+            <label className="modal-label">{t('diskUsage')}</label>
+            <LogsRow />
 
             <label className="modal-label">{t('version')}</label>
             <UpdateRow />
@@ -463,6 +471,102 @@ function GoogleSettings(): JSX.Element {
             {t('gcalDisconnect')}
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+function DoctorPanel(): JSX.Element {
+  const [checks, setChecks] = useState<Awaited<ReturnType<typeof window.api.runDoctor>> | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function run(): Promise<void> {
+    setBusy(true)
+    try {
+      setChecks(await window.api.runDoctor())
+    } catch {
+      setChecks([])
+    } finally {
+      setBusy(false)
+    }
+  }
+  useEffect(() => {
+    run()
+  }, [])
+
+  return (
+    <div className="doctor">
+      <div className="doctor-head">
+        <span className="muted">{t('doctorHint')}</span>
+        <button className="btn" onClick={run} disabled={busy}>
+          {busy ? t('doctorRunning') : `↻ ${t('doctorRun')}`}
+        </button>
+      </div>
+      {(checks || []).map((c) => (
+        <div key={c.id} className={`doctor-row ${c.status}`}>
+          <span className="doctor-dot">{c.status === 'ok' ? '✓' : c.status === 'warn' ? '!' : '✕'}</span>
+          <span className="doctor-label">{c.label}</span>
+          <span className="doctor-detail">{c.detail}</span>
+          {c.hint && <code className="doctor-hint">{c.hint}</code>}
+        </div>
+      ))}
+      {!checks && <div className="muted">{t('doctorRunning')}</div>}
+    </div>
+  )
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let v = bytes / 1024
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`
+}
+
+function LogsRow(): JSX.Element {
+  const [stats, setStats] = useState<Awaited<ReturnType<typeof window.api.logStats>> | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  function refresh(): void {
+    window.api.logStats().then(setStats).catch(() => setStats(null))
+  }
+  useEffect(refresh, [])
+
+  async function prune(days: number): Promise<void> {
+    if (days === 0 && !confirm(t('confirmPruneAll'))) return
+    setBusy(true)
+    const r = await window.api.pruneLogs(days)
+    setBusy(false)
+    refresh()
+    toast(ti('toastLogsPruned', { n: r.files, size: fmtSize(r.freed) }), 'success')
+  }
+
+  const days = stats ? Math.floor(stats.oldestMs / 86400000) : 0
+  return (
+    <div className="update-col">
+      <div className="update-row">
+        <span className="app-version">{stats ? fmtSize(stats.bytes) : '…'}</span>
+        <span className="muted">
+          {stats ? ti('logsSummary', { n: stats.files, days }) : ''}
+          {stats && stats.orphanBytes > 0
+            ? ` · ${ti('logsOrphan', { size: fmtSize(stats.orphanBytes) })}`
+            : ''}
+        </span>
+      </div>
+      <div className="update-row">
+        <button className="btn" onClick={() => prune(30)} disabled={busy}>
+          {t('pruneOlder30')}
+        </button>
+        <button className="btn" onClick={() => prune(7)} disabled={busy}>
+          {t('pruneOlder7')}
+        </button>
+        <button className="btn" onClick={() => prune(0)} disabled={busy}>
+          {t('pruneAll')}
+        </button>
       </div>
     </div>
   )

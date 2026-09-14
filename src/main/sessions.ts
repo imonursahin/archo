@@ -44,13 +44,19 @@ export function setPaths(store: string, logs: string): void {
   logsDir = logs
 }
 
-async function load(): Promise<TermSession[]> {
+// null means "could not be read" — distinct from "no sessions". Log deletion
+// leans on that difference: a corrupt store must not mark every log an orphan.
+async function loadOrNull(): Promise<TermSession[] | null> {
   try {
     const j = JSON.parse(await fs.readFile(storePath, 'utf8'))
     return Array.isArray(j?.sessions) ? j.sessions : []
   } catch {
-    return []
+    return null
   }
+}
+
+async function load(): Promise<TermSession[]> {
+  return (await loadOrNull()) || []
 }
 async function persist(list: TermSession[]): Promise<void> {
   await fs.writeFile(storePath, JSON.stringify({ sessions: list }, null, 2), 'utf8')
@@ -491,6 +497,94 @@ export async function removeTerminal(sessionId: string, terminalId: string): Pro
   s.terminals = s.terminals.filter((t) => t.id !== terminalId)
   await persist(list)
   await fs.rm(logPathFor(sessionId, terminalId), { force: true }).catch(() => {})
+}
+
+export interface LogStats {
+  bytes: number
+  files: number
+  orphanBytes: number // logs whose session no longer exists
+  oldestMs: number // age of the oldest log file, 0 when there are none
+}
+
+// Walk the log dir once and report both what it costs and what is safe to drop.
+export async function logStats(): Promise<LogStats> {
+  const sessions = await loadOrNull()
+  const live = new Set((sessions || []).map((s) => s.id))
+  const out: LogStats = { bytes: 0, files: 0, orphanBytes: 0, oldestMs: 0 }
+  const now = Date.now()
+  let dirs: import('fs').Dirent[] = []
+  try {
+    dirs = await fs.readdir(logsDir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue
+    let files: string[] = []
+    try {
+      files = await fs.readdir(path.join(logsDir, d.name))
+    } catch {
+      continue
+    }
+    for (const f of files) {
+      try {
+        const st = await fs.stat(path.join(logsDir, d.name, f))
+        out.bytes += st.size
+        out.files++
+        if (sessions && !live.has(d.name)) out.orphanBytes += st.size
+        const age = now - st.mtimeMs
+        if (age > out.oldestMs) out.oldestMs = age
+      } catch {
+        /* vanished mid-walk */
+      }
+    }
+  }
+  return out
+}
+
+// Delete logs older than `days` (0 = every log). Orphans — logs of sessions that
+// are already gone — always go, regardless of age.
+export async function pruneLogs(
+  days: number,
+  keepTerminalIds: string[] = []
+): Promise<{ freed: number; files: number }> {
+  const keep = new Set(keepTerminalIds.map((id) => `${id}.jsonl`))
+  const sessions = await loadOrNull()
+  const live = new Set((sessions || []).map((s) => s.id))
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  const res = { freed: 0, files: 0 }
+  let dirs: import('fs').Dirent[] = []
+  try {
+    dirs = await fs.readdir(logsDir, { withFileTypes: true })
+  } catch {
+    return res
+  }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue
+    const dir = path.join(logsDir, d.name)
+    const orphan = !!sessions && !live.has(d.name)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(dir)
+    } catch {
+      continue
+    }
+    for (const f of files) {
+      if (keep.has(f)) continue // a terminal that is still recording
+      const abs = path.join(dir, f)
+      try {
+        const st = await fs.stat(abs)
+        if (!orphan && days > 0 && st.mtimeMs >= cutoff) continue
+        await fs.rm(abs, { force: true })
+        res.freed += st.size
+        res.files++
+      } catch {
+        /* ignore */
+      }
+    }
+    await fs.rmdir(dir).catch(() => {}) // only succeeds once the dir is empty
+  }
+  return res
 }
 
 // Read a terminal's recorded output as one concatenated string (for replay).

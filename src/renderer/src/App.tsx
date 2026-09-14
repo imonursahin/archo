@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Editor from './components/Editor'
 import McpPanel from './components/McpPanel'
+import HookPanel from './components/HookPanel'
+import ShareModal from './components/ShareModal'
+import PluginsPanel from './components/PluginsPanel'
+import CloneModal from './components/CloneModal'
 import SessionsView from './components/SessionsView'
 import ToolsView from './components/ToolsView'
 import Home from './components/Home'
@@ -18,7 +22,13 @@ import ToastHost from './components/ToastHost'
 import { bus } from './lib/bus'
 import { t, ti, getLang, setLang } from './lib/i18n'
 import { getTheme, applyTheme } from './lib/theme'
-import { getPrefs, exportAppState, importAppState } from './lib/prefs'
+import {
+  getPrefs,
+  exportAppState,
+  importAppState,
+  forgetResource,
+  forgetAssistant
+} from './lib/prefs'
 import { toast } from './lib/toast'
 import type { Assistant, EngineDef, ResourceGroups, ResourceItem } from './global'
 
@@ -37,6 +47,9 @@ export default function App(): JSX.Element {
   const [showAssistantModal, setShowAssistantModal] = useState(false)
   const [showUsage, setShowUsage] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [sharing, setSharing] = useState<Assistant | null>(null)
+  const [showPlugins, setShowPlugins] = useState(false)
+  const [showClone, setShowClone] = useState(false)
   const [caffeine, setCaffeine] = useState(false)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [showUpdate, setShowUpdate] = useState(false)
@@ -269,6 +282,9 @@ export default function App(): JSX.Element {
     if (getPrefs().confirmDelete && !confirm(ti('confirmDeleteResource', { name: item.name }))) return
     if (item.kind === 'mcp' && item.path) await window.api.deleteMcpServer(item.path, item.name)
     else if (item.path) await window.api.deleteResource(item.path)
+    // an mcp item shares its file with every other server in it — the path is
+    // still live after one entry is deleted
+    if (item.path && active && item.kind !== 'mcp') forgetResource(active.id, item.path)
     if (selected?.path === item.path) setSelected(null)
     refresh()
     toast(ti('toastDeleted', { name: item.name }), 'success')
@@ -325,10 +341,18 @@ export default function App(): JSX.Element {
               toast(ti('toastImported', { name: r.assistant.name }), 'success')
             }
           }}
+          onShare={(a) => setSharing(a)}
+          onClone={() => setShowClone(true)}
           onExport={async (a) => {
             const appState = exportAppState(a.baseDir, a.id)
             const r = await window.api.exportAssistant(a.id, appState)
-            if (r.ok) toast(ti('toastExported', { name: a.name }), 'success')
+            if (!r.ok) return
+            toast(ti('toastExported', { name: a.name, n: r.files ?? 0 }), 'success')
+            if (r.dropped?.length)
+              toast(
+                ti('toastExportDropped', { n: r.dropped.length, first: r.dropped[0] }),
+                'warn'
+              )
           }}
           update={update}
           onShowUpdate={() => setShowUpdate(true)}
@@ -343,6 +367,7 @@ export default function App(): JSX.Element {
               )
             ) {
               window.api.deleteAssistant(a.id, true).then(() => {
+                forgetAssistant(a.id, a.baseDir)
                 setAssistants((l) => l.filter((x) => x.id !== a.id))
                 toast(ti('toastAssistantDeleted', { name: a.name }), 'success')
               })
@@ -357,6 +382,29 @@ export default function App(): JSX.Element {
               setAssistants((l) => [...l, a])
               setActive(a)
             }}
+          />
+        )}
+        {showClone && (
+          <CloneModal
+            onClose={() => setShowClone(false)}
+            onClone={async (url) => {
+              const r = await window.api.shareClone(url)
+              if (r.ok && r.assistant) {
+                setAssistants((l) => [...l, r.assistant!])
+                toast(ti('toastCloned', { name: r.assistant.name }), 'success')
+                setShowClone(false)
+              } else {
+                toast(r.error || t('toastCloneFailed'), 'error')
+              }
+            }}
+          />
+        )}
+        {sharing && <ShareModal assistant={sharing} onClose={() => setSharing(null)} />}
+        {showPlugins && active && (
+          <PluginsPanel
+            assistant={active}
+            onClose={() => setShowPlugins(false)}
+            onChanged={refresh}
           />
         )}
         {showUsage && <UsagePanel onClose={() => setShowUsage(false)} />}
@@ -440,6 +488,7 @@ export default function App(): JSX.Element {
           onSelect={(item) => setSelected(item)}
           onNew={openCreate}
           onUsage={() => setShowUsage(true)}
+          onManagePlugins={() => setShowPlugins(true)}
           onDelete={deleteResource}
           onDuplicate={duplicateResource}
           onTogglePlugin={togglePlugin}
@@ -486,6 +535,13 @@ export default function App(): JSX.Element {
                     onClose={() => setSelected(null)}
                     onChanged={refresh}
                     onStatus={setStatus}
+                  />
+                ) : selected.kind === 'hook' ? (
+                  <HookPanel
+                    key={`${selected.path}:${selected.name}`}
+                    item={selected}
+                    onClose={() => setSelected(null)}
+                    onChanged={refresh}
                   />
                 ) : (
                   <Editor

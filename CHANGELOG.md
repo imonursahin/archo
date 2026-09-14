@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0
+
+**Added**
+- **Windows and Linux builds.** Releases now carry installers for all three platforms: `.dmg`/`.zip` for macOS, `.exe`/`.zip` for Windows, `.AppImage`/`.deb` for Linux. The parts of the app that only ever worked on a Mac were fixed along the way — the PATH passed to terminals is joined with the platform's own separator (on Windows the old `:` join flattened the whole PATH into one bogus entry, so nothing resolved), terminals spawn PowerShell with arguments PowerShell actually understands, the transcript folder name now encodes drive letters and backslashes (without it usage and transcript search silently found nothing), the skill bridge falls back to directory junctions where symlinks need admin rights, MCP servers spawn through a shell so `npx`/`uvx` shims resolve, terminal copy/paste answers Ctrl+Shift+C/V, and the title bar no longer reserves space for traffic lights that aren't there.
+- **Plugin management.** "manage plugins" under the Plugins group opens a panel listing installed and available plugins plus your marketplaces: install, uninstall, update, enable/disable, and add or remove a marketplace. Everything runs through the `claude plugin` CLI rather than editing its files behind its back.
+- **Share an assistant with git.** The ⎇ button on an assistant card turns its folder into a git repo — a `.gitignore` keeping local permissions and logs out, then commit, remote, push and pull from one dialog. "Clone" on the home screen pulls someone else's assistant from a repo and registers it.
+- **Hook editor.** Clicking a hook opens an editor for that event instead of the whole `settings.json` as raw text: add and remove matchers, edit each command and its timeout, switch to raw JSON, or delete the event. Writes touch only that event's key, so permissions and everything else in the file are left alone.
+- **Doctor.** A new Settings tab that checks what Archo needs on this machine — the Claude CLI and its version, a stored login, a writable assistants folder, the transcripts folder, git, node, and `gh` auth — and prints the fix for whatever is missing.
+- **Terminal recording cleanup.** Settings › General now shows how much disk the recorded scrollback uses, how much of it belongs to sessions you already deleted, and clears logs older than 30 or 7 days, or all of them.
+- **Variables in saved prompts.** A prompt containing `{{ticket}}` asks for the values when you send it and substitutes them. Prompts without variables are unchanged.
+- **Frontmatter warnings.** The editor flags a skill or agent that Claude Code would never load — missing frontmatter, a missing `name` or `description`, a name that doesn't match its folder, or a description too short to trigger on. Warnings only; saving is never blocked.
+
+**Changed**
+- An exported bundle now blanks every MCP server's `env` values, so the receiver sees which keys a server needs without receiving yours. The same config is kept out of a shared git repo entirely — add it yourself if it holds no secrets.
+- Exporting an assistant no longer packs machine-local files: `.claude/settings.local.json`, `.claude/logs/` and any `.env` stay behind. Binary files are detected by content instead of being silently mangled by a UTF-8 round-trip, and every file left out (binary or over 512KB) is listed in the bundle and reported after the export — previously they just vanished.
+- Deleting a resource or an assistant now also clears what the app remembered about it: its favorite entry and its place in the sidebar ordering, plus the recent-directory list of a deleted assistant.
+
+**Fixed**
+- Typing in transcript search crashed on every keystroke (a setter that didn't exist).
+- Two different translations were registered under the same key, so one of them could never appear.
+
 ## 0.1.19
 
 **Changed**

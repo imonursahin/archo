@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { shellArgv, needsShell } from './shellenv'
 
 export interface McpTool {
   name: string
@@ -160,9 +161,11 @@ export async function testMcp(cfg: any, timeoutMs = 15000): Promise<McpTestResul
 
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(cfg.command, cfg.args || [], {
+      child = spawn(shellArgv([cfg.command])[0], shellArgv(cfg.args || []), {
         env: cleanEnv(cfg.env),
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // npx/uvx are .cmd shims on Windows; spawn without a shell is ENOENT
+        shell: needsShell
       })
     } catch (e: any) {
       return finish({ ok: false, error: e?.message || 'spawn hatası', elapsedMs: elapsed() })
@@ -283,9 +286,11 @@ export async function callMcpTool(
     }
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(cfg.command, cfg.args || [], {
+      child = spawn(shellArgv([cfg.command])[0], shellArgv(cfg.args || []), {
         env: cleanEnv(cfg.env),
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // npx/uvx are .cmd shims on Windows; spawn without a shell is ENOENT
+        shell: needsShell
       })
     } catch (e: any) {
       return finish({ ok: false, error: e?.message || 'spawn hatası', elapsedMs: elapsed() })

@@ -3,12 +3,14 @@ import { promisify } from 'util'
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
+import { withPath } from './shellenv'
 
 const pexec = promisify(execFile)
 
 async function git(dir: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
   const { stdout } = await pexec('git', ['-C', dir, ...args], {
-    env: env || process.env,
+    // launched from Finder, git may not be on the inherited PATH
+    env: withPath(env || process.env),
     maxBuffer: 1024 * 1024 * 32
   })
   return stdout
@@ -149,6 +151,137 @@ export async function gitCheckpoint(dir: string, message: string): Promise<Check
 // Restore working-tree files to a checkpoint's content.
 export async function gitRestoreCheckpoint(dir: string, sha: string): Promise<void> {
   await git(dir, ['checkout', sha, '--', '.'])
+}
+
+// ---------- Publishing an assistant as a git repo ----------
+// An assistant folder is already a self-contained project, so sharing it is
+// plain git: init, ignore the machine-local bits, commit, push.
+const ASSISTANT_IGNORE_HEADER = '# Archo — machine-local, never shared\n'
+const ASSISTANT_IGNORE_RULES = [
+  // The MCP config is part of an assistant, but its `env` block holds server
+  // API keys — a shared repo must not carry them. Force-add it yourself if
+  // yours has no secrets in it.
+  '.mcp.json',
+  '**/.claude/settings.local.json',
+  '**/.claude/logs/',
+  '.env',
+  '.env.*',
+  '.DS_Store',
+  'node_modules/'
+]
+// Rules whose files hold credentials — these are pulled out of the index even
+// when an earlier commit already tracked them.
+const SECRET_IGNORE_RULES = ['**/.claude/settings.local.json', '.env', '.env.*']
+// The same files as git PATHSPECS — glob magic, so they match at any depth
+// (a nested project inside an assistant has its own .claude folder).
+const SECRET_PATHSPECS = [
+  ':(glob)**/.claude/settings.local.json',
+  ':(glob)**/.env',
+  ':(glob)**/.env.*'
+]
+
+export interface RepoInfo {
+  isRepo: boolean
+  branch?: string
+  dirty?: boolean
+  remote?: string
+  ahead?: number
+}
+
+export async function repoInfo(dir: string): Promise<RepoInfo> {
+  const base = await gitBranch(dir)
+  if (!base.isRepo) return { isRepo: false }
+  const remote = (await git(dir, ['remote', 'get-url', 'origin']).catch(() => '')).trim()
+  let ahead = 0
+  try {
+    const counts = await git(dir, ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'])
+    ahead = parseInt(counts.trim().split(/\s+/)[0], 10) || 0
+  } catch {
+    // no upstream yet — everything local counts as unpublished
+    const all = await git(dir, ['rev-list', '--count', 'HEAD']).catch(() => '0')
+    ahead = parseInt(all.trim(), 10) || 0
+  }
+  return { ...base, remote: remote || undefined, ahead }
+}
+
+// init (if needed) + .gitignore + commit everything. Never pushes.
+export async function publishAssistant(
+  dir: string,
+  message: string
+): Promise<{ committed: boolean; branch: string }> {
+  const isRepo = (await gitBranch(dir)).isRepo
+  if (!isRepo) {
+    await git(dir, ['init', '-b', 'main'])
+  }
+  // An existing .gitignore must not mean "no protection": every rule below has
+  // to be present, or `git add -A` would stage credentials and local settings.
+  const ignorePath = path.join(dir, '.gitignore')
+  const current = await fs.readFile(ignorePath, 'utf8').catch(() => '')
+  const have = new Set(current.split('\n').map((l) => l.trim()))
+  const missing = ASSISTANT_IGNORE_RULES.filter((r) => !have.has(r))
+  if (missing.length) {
+    const prefix = current && !current.endsWith('\n') ? '\n' : ''
+    await fs.writeFile(ignorePath, current + prefix + ASSISTANT_IGNORE_HEADER + missing.join('\n') + '\n', 'utf8')
+  }
+  // Anything committed before those rules existed would stay tracked, so drop it
+  // from the index — but only the rules that carry secrets. The MCP config is
+  // deliberately force-addable (the comment above says so), and un-tracking it on
+  // every publish would delete it from a repo the user chose to share it in.
+  for (const spec of SECRET_PATHSPECS)
+    await git(dir, ['rm', '--cached', '-r', '--ignore-unmatch', spec]).catch(() => {})
+  await git(dir, ['add', '-A'])
+  // `git rm --cached` refuses when the file is staged with different content, so
+  // verify rather than trust it — committing a credential is not recoverable.
+  // no .catch: a failed check must not read as "nothing tracked"
+  const stillTracked = (await git(dir, ['ls-files', '--', ...SECRET_PATHSPECS])).trim()
+  if (stillTracked)
+    throw new Error(`refusing to commit tracked local files: ${stillTracked.split('\n').join(', ')}`)
+  const staged = (await git(dir, ['diff', '--cached', '--name-only'])).trim()
+  if (staged) await git(dir, ['commit', '-m', message])
+  // symbolic-ref, not rev-parse: a first publish that staged nothing leaves an
+  // unborn HEAD, which rev-parse cannot resolve
+  const branch = (await git(dir, ['symbolic-ref', '--short', 'HEAD']).catch(() => 'main')).trim()
+  return { committed: !!staged, branch }
+}
+
+// A repository URL reaches git as an argument, so one starting with '-' is read
+// as an OPTION — `--upload-pack=<cmd>` and `--config=core.sshCommand=<cmd>` both
+// run an arbitrary command. Accept only shapes that are actually a repository.
+const REPO_URL_RE =
+  /^(https?:\/\/|git:\/\/|ssh:\/\/|file:\/\/|\/|[A-Za-z]:[\\/]|\\\\|[\w.-]+@[\w.-]+:)[^\s]*$/
+
+function assertRepoUrl(url: string): string {
+  const u = (url || '').trim()
+  if (!REPO_URL_RE.test(u)) throw new Error(`unsupported repository URL: ${url}`)
+  return u
+}
+
+export async function setRemote(dir: string, url: string): Promise<void> {
+  const safe = assertRepoUrl(url)
+  const existing = (await git(dir, ['remote']).catch(() => '')).trim().split('\n')
+  if (existing.includes('origin')) await git(dir, ['remote', 'set-url', 'origin', safe])
+  else await git(dir, ['remote', 'add', 'origin', safe])
+}
+
+export async function pushAssistant(dir: string, env?: NodeJS.ProcessEnv): Promise<string> {
+  const branch = (await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  return git(dir, ['push', '-u', 'origin', branch], env)
+}
+
+export async function pullAssistant(dir: string, env?: NodeJS.ProcessEnv): Promise<string> {
+  return git(dir, ['pull', '--ff-only'], env)
+}
+
+export async function cloneAssistant(
+  url: string,
+  targetDir: string,
+  env?: NodeJS.ProcessEnv
+): Promise<void> {
+  const safe = assertRepoUrl(url)
+  await pexec('git', ['clone', '--', safe, targetDir], {
+    env: env || process.env,
+    maxBuffer: 1024 * 1024 * 32
+  })
 }
 
 function hash(s: string): number {

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { safeReadDir } from './fsutil'
+import { projectSlug } from './shellenv'
 
 const HOME = os.homedir()
 const CLAUDE_DIR = path.join(HOME, '.claude')
@@ -117,7 +118,7 @@ export interface SessionMessage {
 // Find the claude session id most recently written for a given cwd,
 // used to capture the transcript a freshly-launched `claude` created.
 export async function detectClaudeSession(cwd: string, sinceMs: number): Promise<string | null> {
-  const slug = cwd.replace(/[/.]/g, '-')
+  const slug = projectSlug(cwd)
   const dir = path.join(CLAUDE_DIR, 'projects', slug)
   const files = (await safeReadDir(dir)).filter((f) => f.endsWith('.jsonl'))
   let best: { id: string; mtime: number } | null = null
@@ -161,7 +162,7 @@ export async function detectClaudeSessions(
   cwd: string,
   sinceMs: number
 ): Promise<{ id: string; mtime: number; btime: number }[]> {
-  const slug = cwd.replace(/[/.]/g, '-')
+  const slug = projectSlug(cwd)
   const dir = path.join(CLAUDE_DIR, 'projects', slug)
   const out: { id: string; mtime: number; btime: number }[] = []
   for (const f of await safeReadDir(dir)) {

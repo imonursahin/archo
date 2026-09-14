@@ -14,6 +14,8 @@ interface Props {
   onDelete: (a: Assistant) => void
   onImport: () => void
   onExport: (a: Assistant) => void
+  onShare: (a: Assistant) => void
+  onClone: () => void
   update?: UpdateInfo | null
   onShowUpdate?: () => void
   onSearchTranscripts?: () => void
@@ -30,6 +32,8 @@ export default function Home({
   onDelete,
   onImport,
   onExport,
+  onShare,
+  onClone,
   update,
   onShowUpdate,
   onSearchTranscripts
@@ -59,6 +63,9 @@ export default function Home({
           <button className="btn big" onClick={onImport} title={t('importAssistant')}>
             ⤒ {t('import')}
           </button>
+          <button className="btn big" onClick={onClone} title={t('cloneAssistant')}>
+            ⎇ {t('clone')}
+          </button>
           <button className="btn primary big icon-btn" onClick={onCreate}>
             <Icon name="plus" /> {t('newAssistant')}
           </button>
@@ -78,6 +85,16 @@ export default function Home({
               <div className="ac-top">
                 <span className="ac-icon">{a.icon}</span>
                 <span className="ac-engine">{engineName(a.engineId)}</span>
+                <button
+                  className="ac-export"
+                  title={t('shareAssistant')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onShare(a)
+                  }}
+                >
+                  ⎇
+                </button>
                 <button
                   className="ac-export"
                   title={t('exportAssistant')}

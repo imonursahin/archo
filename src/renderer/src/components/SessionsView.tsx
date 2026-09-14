@@ -174,12 +174,17 @@ function TermInstance({
         window.api.ptyWrite(term.id, '\\\r')
         return false
       }
-      if (e.type !== 'keydown' || !e.metaKey) return true
-      if (e.key === 'c' && xterm.hasSelection()) {
+      // Ctrl+C in a terminal is SIGINT, so Windows/Linux put copy/paste on
+      // Ctrl+Shift+C/V — without this there is no way to copy a selection there.
+      const isMac = navigator.platform.toUpperCase().includes('MAC')
+      const accel = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && e.shiftKey
+      if (e.type !== 'keydown' || !accel) return true
+      const key = e.key.toLowerCase()
+      if (key === 'c' && xterm.hasSelection()) {
         navigator.clipboard.writeText(xterm.getSelection())
         return false
       }
-      if (e.key === 'v') {
+      if (key === 'v') {
         // A screenshot/image on the clipboard has no text/plain representation,
         // so xterm's own native paste (which only reads text) silently does
         // nothing with it — but Claude Code has its own native image paste

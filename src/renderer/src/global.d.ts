@@ -215,13 +215,34 @@ export interface TranscriptHit {
   mtime: number
 }
 
+export interface PluginEntry {
+  id: string
+  version?: string
+  scope?: string
+  enabled?: boolean
+  installPath?: string
+  lastUpdated?: string
+  installed: boolean
+}
+
+export interface Marketplace {
+  name: string
+  source?: string
+  repo?: string
+  ref?: string
+  installLocation?: string
+}
+
 export interface StudioApi {
   listEngines(): Promise<EngineDef[]>
   listAssistants(): Promise<Assistant[]>
   createAssistant(input: { name: string; icon?: string; engineId: string }): Promise<Assistant>
   deleteAssistant(id: string, files: boolean): Promise<void>
   runAssistant(id: string): Promise<{ cwd: string; command: string } | null>
-  exportAssistant(id: string, appState: unknown): Promise<{ ok: boolean; path?: string }>
+  exportAssistant(
+    id: string,
+    appState: unknown
+  ): Promise<{ ok: boolean; path?: string; files?: number; dropped?: string[] }>
   importAssistant(): Promise<{ ok: boolean; assistant?: Assistant; appState?: unknown }>
   listResources(assistantId: string): Promise<ResourceGroups>
   readResource(file: string): Promise<string>
@@ -263,6 +284,8 @@ export interface StudioApi {
   ): Promise<{ ok: boolean; result?: unknown; error?: string; elapsedMs: number }>
   updateMcpServer(file: string, name: string, cfg: unknown): Promise<void>
   deleteMcpServer(file: string, name: string): Promise<void>
+  updateHookEvent(file: string, event: string, matchers: unknown): Promise<void>
+  deleteHookEvent(file: string, event: string): Promise<void>
   setPluginEnabled(id: string, key: string, enabled: boolean): Promise<{ ok: boolean }>
   setMcpEnabled(id: string, name: string, enabled: boolean): Promise<{ ok: boolean }>
   getUsage(): Promise<UsageReport>
@@ -370,6 +393,34 @@ export interface StudioApi {
   meetingsToday(): Promise<{ meetings: MeetingItem[]; error?: string }>
   jiraIssue(key: string): Promise<{ issue?: JiraItem; error?: string }>
   sessionJiraBindings(): Promise<JiraBinding[]>
+  shareInfo(id: string): Promise<{
+    isRepo: boolean
+    branch?: string
+    dirty?: boolean
+    remote?: string
+    ahead?: number
+  }>
+  sharePublish(
+    id: string,
+    message: string
+  ): Promise<{ ok: boolean; error?: string; committed?: boolean; branch?: string }>
+  shareSetRemote(id: string, url: string): Promise<{ ok: boolean; error?: string }>
+  sharePush(id: string): Promise<{ ok: boolean; error?: string; output?: string }>
+  sharePull(id: string): Promise<{ ok: boolean; error?: string; output?: string }>
+  shareClone(url: string): Promise<{ ok: boolean; error?: string; assistant?: Assistant }>
+  listPlugins(id: string): Promise<{
+    ok: boolean
+    error?: string
+    installed: PluginEntry[]
+    available: PluginEntry[]
+  }>
+  listMarketplaces(id: string): Promise<Marketplace[]>
+  pluginAction(id: string, action: string, arg: string): Promise<{ ok: boolean; error?: string }>
+  runDoctor(): Promise<
+    { id: string; label: string; status: 'ok' | 'warn' | 'fail'; detail: string; hint?: string }[]
+  >
+  logStats(): Promise<{ bytes: number; files: number; orphanBytes: number; oldestMs: number }>
+  pruneLogs(days: number): Promise<{ freed: number; files: number }>
   getGoogleConfig(): Promise<{ hasClient: boolean; connected: boolean; email: string }>
   connectGoogle(input: {
     clientId: string

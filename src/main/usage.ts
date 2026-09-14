@@ -2,6 +2,7 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { safeReadDir } from './fsutil'
+import { projectSlug } from './shellenv'
 
 const HOME = os.homedir()
 const CLAUDE_DIR = path.join(HOME, '.claude')
@@ -105,7 +106,7 @@ export async function sessionUsage(cwd: string, sessionId: string): Promise<Sess
     messages: 0
   }
   if (!cwd || !sessionId) return empty
-  const slug = cwd.replace(/[/.]/g, '-')
+  const slug = projectSlug(cwd)
   const file = path.join(CLAUDE_DIR, 'projects', slug, `${sessionId}.jsonl`)
   let raw: string
   try {

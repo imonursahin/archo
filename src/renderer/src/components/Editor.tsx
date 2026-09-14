@@ -59,6 +59,40 @@ const FIELD_SUGGEST: Record<string, string[]> = {
 const MODEL_OPTS = ['inherit', 'opus', 'sonnet', 'haiku']
 const COLOR_OPTS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'cyan']
 
+// Claude Code only discovers a skill/agent by its frontmatter: a missing name or
+// description means the resource silently never triggers.
+function lint(
+  kind: string,
+  filePath: string,
+  fm: Record<string, string>,
+  hasFm: boolean
+): { level: 'error' | 'warn'; text: string }[] {
+  if (!['skill', 'agent', 'command'].includes(kind)) return []
+  const out: { level: 'error' | 'warn'; text: string }[] = []
+  const name = (fm.name || '').trim()
+  const desc = (fm.description || '').trim()
+  // a skill lives in <dir>/SKILL.md, so its identity is the folder name
+  const parts = filePath.split(/[/\\]/)
+  const expected =
+    kind === 'skill'
+      ? parts[parts.length - 2] || ''
+      : (parts[parts.length - 1] || '').replace(/\.md$/, '')
+
+  if (!hasFm && kind !== 'command') {
+    out.push({ level: 'error', text: ti('lintNoFrontmatter', { kind }) })
+    return out
+  }
+  if (!name && kind !== 'command') out.push({ level: 'error', text: t('lintNoName') })
+  else if (name && !/^[a-z0-9][a-z0-9-]*$/.test(name))
+    out.push({ level: 'warn', text: ti('lintNameShape', { name }) })
+  else if (name && expected && name !== expected)
+    out.push({ level: 'warn', text: ti('lintNameMismatch', { name, expected }) })
+
+  if (!desc && kind !== 'command') out.push({ level: 'error', text: t('lintNoDesc') })
+  else if (desc && desc.length < 25) out.push({ level: 'warn', text: t('lintDescShort') })
+  return out
+}
+
 function parse(text: string): { fm: Record<string, string>; order: string[]; body: string } {
   const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   if (!m) return { fm: {}, order: [], body: text }
@@ -198,6 +232,7 @@ export default function Editor({ item, onDirtyChange, onClose }: Props): JSX.Ele
   }
 
   const hasFm = order.length > 0
+  const issues = lint(item.kind, item.path || item.name, fm, hasFm)
   const extraKeys = order.filter((k) => !['name', 'description'].includes(k))
   const isJson = !!item.path && item.path.endsWith('.json')
   const suggestions = (FIELD_SUGGEST[item.kind] || []).filter((k) => !order.includes(k))
@@ -288,6 +323,17 @@ export default function Editor({ item, onDirtyChange, onClose }: Props): JSX.Ele
               ))}
         </div>
       </div>
+
+      {issues.length > 0 && (
+        <div className="lint-bar">
+          {issues.map((is, i) => (
+            <div key={i} className={`lint-item ${is.level}`}>
+              <span>{is.level === 'error' ? '✕' : '!'}</span>
+              {is.text}
+            </div>
+          ))}
+        </div>
+      )}
 
       {mode === 'raw' && (
         <div className="editor-body">

@@ -101,7 +101,7 @@ export default function TranscriptSearch({
             value={q}
             onChange={(e) => {
               setQ(e.target.value)
-              setOpenFile(null)
+              setOpenHit(null)
             }}
           />
           {assistant && (

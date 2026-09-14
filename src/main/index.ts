@@ -5,6 +5,7 @@ import {
   ipcMain,
   dialog,
   clipboard,
+  Menu,
   Notification,
   nativeImage,
   powerSaveBlocker
@@ -64,13 +65,7 @@ function httpsJson(url: string): Promise<any> {
   })
 }
 
-function ghEnv(): NodeJS.ProcessEnv {
-  const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
-  return {
-    ...process.env,
-    PATH: [...new Set([...(process.env.PATH || '').split(':'), ...extra])].join(':')
-  }
-}
+const ghEnv = shellEnv
 
 async function latestViaGh(): Promise<{ tag: string; url: string }> {
   const { stdout } = await pexec(
@@ -190,14 +185,18 @@ import {
   createAssistant,
   deleteAssistant,
   listEngines,
+  ASSISTANTS_ROOT,
   getRunInfo,
   assistantBaseDir,
   updateMcpServer,
+  updateHookEvent,
+  deleteHookEvent,
   deleteMcpServer,
   setMcpEnabled,
   setPluginEnabled,
   exportAssistant,
   importAssistant,
+  registerAssistant,
   bridgeStatus,
   linkSkills,
   unlinkSkills,
@@ -258,15 +257,44 @@ import {
   deleteSessionsForAssistant,
   readTerminalLog,
   logPathFor,
-  listJiraBindings
+  listJiraBindings,
+  logStats,
+  pruneLogs
 } from './sessions'
-import { gitStatus, gitRevertFile, gitCheckpoint, gitRestoreCheckpoint, gitBranch } from './git'
+import {
+  gitStatus,
+  gitRevertFile,
+  gitCheckpoint,
+  gitRestoreCheckpoint,
+  gitBranch,
+  repoInfo,
+  publishAssistant,
+  setRemote,
+  pushAssistant,
+  pullAssistant,
+  cloneAssistant
+} from './git'
+import { runDoctor } from './doctor'
+import { projectSlug, shellEnv } from './shellenv'
+import {
+  listPlugins,
+  listMarketplaces,
+  pluginInstall,
+  pluginUninstall,
+  pluginUpdate,
+  pluginEnable,
+  pluginDisable,
+  marketplaceAdd,
+  marketplaceRemove,
+  marketplaceUpdate
+} from './plugins'
 import {
   createTerm,
   writeTerm,
   resizeTerm,
   killTerm,
   killAll,
+  liveTermIds,
   isLive,
   snapshot,
   foreground,
@@ -309,7 +337,10 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     icon: ICON_PATH,
-    titleBarStyle: 'hiddenInset',
+    // hiddenInset is a macOS concept; elsewhere the native bar stays and the
+    // renderer must not reserve space for traffic lights
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    autoHideMenuBar: true,
     backgroundColor: '#0d0d0f',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -391,7 +422,7 @@ function registerIpc(): void {
     await deleteAssistant(id, files)
     // when deleting files too, also remove the Claude transcripts for this dir
     if (files && baseDir) {
-      const slug = baseDir.replace(/[/.]/g, '-')
+      const slug = projectSlug(baseDir)
       await fs.promises
         .rm(path.join(os.homedir(), '.claude', 'projects', slug), {
           recursive: true,
@@ -431,6 +462,10 @@ function registerIpc(): void {
     updateMcpServer(file, name, cfg)
   )
   handle('mcp:delete', (file: string, name: string) => deleteMcpServer(file, name))
+  handle('hook:update', (file: string, event: string, matchers: unknown) =>
+    updateHookEvent(file, event, matchers)
+  )
+  handle('hook:delete', (file: string, event: string) => deleteHookEvent(file, event))
   handle('mcp:setEnabled', (id: string, name: string, enabled: boolean) =>
     setMcpEnabled(id, name, enabled)
   )
@@ -451,7 +486,12 @@ function registerIpc(): void {
       JSON.stringify({ ...bundle, appState: appState || null }, null, 2),
       'utf8'
     )
-    return { ok: true as const, path: res.filePath }
+    return {
+      ok: true as const,
+      path: res.filePath,
+      files: Object.keys(bundle.files).length,
+      dropped: bundle.dropped || []
+    }
   })
   handle('assistant:import', async () => {
     const res = await dialog.showOpenDialog({
@@ -669,6 +709,108 @@ function registerIpc(): void {
   handle('tools:meetings', () => meetingsToday())
   handle('jira:issue', (key: string) => jiraIssue(key))
   handle('sessions:jiraBindings', () => listJiraBindings())
+  handle('doctor:run', () => runDoctor(ASSISTANTS_ROOT))
+  // ---- plugins & marketplaces (driven through the claude CLI) ----
+  handle('plugins:list', async (id: string) => {
+    const dir = await assistantBaseDir(id)
+    if (!dir) return { ok: false as const, error: 'assistant not found', installed: [], available: [] }
+    return listPlugins(dir)
+  })
+  handle('plugins:marketplaces', async (id: string) => {
+    const dir = await assistantBaseDir(id)
+    return dir ? listMarketplaces(dir) : []
+  })
+  handle('plugins:action', async (id: string, action: string, arg: string) => {
+    const dir = await assistantBaseDir(id)
+    if (!dir) return { ok: false as const, error: 'assistant not found' }
+    switch (action) {
+      case 'install':
+        return pluginInstall(dir, arg)
+      case 'uninstall':
+        return pluginUninstall(dir, arg)
+      case 'update':
+        return pluginUpdate(dir, arg)
+      case 'enable':
+        return pluginEnable(dir, arg)
+      case 'disable':
+        return pluginDisable(dir, arg)
+      case 'marketplaceAdd':
+        return marketplaceAdd(dir, arg)
+      case 'marketplaceRemove':
+        return marketplaceRemove(dir, arg)
+      case 'marketplaceUpdate':
+        return marketplaceUpdate(dir, arg || undefined)
+      default:
+        return { ok: false as const, error: `unknown action ${action}` }
+    }
+  })
+  // ---- sharing an assistant as a git repo ----
+  handle('share:info', async (id: string) => {
+    const dir = await assistantBaseDir(id)
+    return dir ? repoInfo(dir) : { isRepo: false }
+  })
+  handle('share:publish', async (id: string, message: string) => {
+    const dir = await assistantBaseDir(id)
+    if (!dir) return { ok: false as const, error: 'assistant not found' }
+    try {
+      const r = await publishAssistant(dir, message || 'Update assistant')
+      return { ok: true as const, ...r }
+    } catch (e: any) {
+      return { ok: false as const, error: String(e?.stderr || e?.message || e) }
+    }
+  })
+  handle('share:setRemote', async (id: string, url: string) => {
+    const dir = await assistantBaseDir(id)
+    if (!dir) return { ok: false as const, error: 'assistant not found' }
+    try {
+      await setRemote(dir, url)
+      return { ok: true as const }
+    } catch (e: any) {
+      return { ok: false as const, error: String(e?.stderr || e?.message || e) }
+    }
+  })
+  handle('share:push', async (id: string) => {
+    const dir = await assistantBaseDir(id)
+    if (!dir) return { ok: false as const, error: 'assistant not found' }
+    try {
+      return { ok: true as const, output: await pushAssistant(dir, ghEnv()) }
+    } catch (e: any) {
+      return { ok: false as const, error: String(e?.stderr || e?.message || e) }
+    }
+  })
+  handle('share:pull', async (id: string) => {
+    const dir = await assistantBaseDir(id)
+    if (!dir) return { ok: false as const, error: 'assistant not found' }
+    try {
+      return { ok: true as const, output: await pullAssistant(dir, ghEnv()) }
+    } catch (e: any) {
+      return { ok: false as const, error: String(e?.stderr || e?.message || e) }
+    }
+  })
+  handle('share:clone', async (url: string) => {
+    // The folder name comes from an untrusted URL — keep only characters that
+    // can name a directory, so no separator or `..` can walk out of the root.
+    const name =
+      (url.split(/[/\\]/).pop() || 'assistant')
+        .replace(/\.git$/, '')
+        .replace(/[^\w.-]/g, '-')
+        .replace(/^[.-]+/, '')
+        .slice(0, 64) || 'assistant'
+    let target = path.join(ASSISTANTS_ROOT, name)
+    let n = 2
+    while (fs.existsSync(target)) target = path.join(ASSISTANTS_ROOT, `${name}-${n++}`)
+    try {
+      await fs.promises.mkdir(ASSISTANTS_ROOT, { recursive: true })
+      await cloneAssistant(url, target, ghEnv())
+      const a = await registerAssistant(target)
+      return { ok: true as const, assistant: a }
+    } catch (e: any) {
+      await fs.promises.rm(target, { recursive: true, force: true }).catch(() => {})
+      return { ok: false as const, error: String(e?.stderr || e?.message || e) }
+    }
+  })
+  handle('logs:stats', () => logStats())
+  handle('logs:prune', (days: number) => pruneLogs(days, liveTermIds()))
   handle('google:getConfig', () => getGoogleConfig())
   handle('google:connect', (input: { clientId: string; clientSecret: string }) =>
     connectGoogle(input)
@@ -722,6 +864,10 @@ function registerIpc(): void {
   ipcMain.on('pty:kill', (_e, id: string) => killTerm(id))
 }
 
+// Windows/Linux otherwise show Electron's default menu bar, which only adds
+// devtools entries and pushes the layout down.
+if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+
 app.whenReady().then(() => {
   // macOS dock icon (dev): the packaged .icns is set at build time
   if (process.platform === 'darwin' && app.dock) {
@@ -751,7 +897,12 @@ app.whenReady().then(() => {
       if (r.hasUpdate && r.url) {
         const n = new Notification({
           title: 'Archo update available',
-          body: `v${r.latest} is out (you have ${r.current}). Click to download — or run: brew update && brew upgrade --cask archo`,
+          body:
+            `v${r.latest} is out (you have ${r.current}). Click to download.` +
+            // the cask only exists on macOS
+            (process.platform === 'darwin'
+              ? ' Or run: brew update && brew upgrade --cask archo'
+              : ''),
           silent: false
         })
         n.on('click', () => {
