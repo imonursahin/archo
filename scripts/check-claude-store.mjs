@@ -102,7 +102,8 @@ await fs.writeFile(
   JSON.stringify({
     assistants: [
       { id: 'demo', name: 'Demo', icon: '🤖', engineId: 'claude', baseDir, createdAt: 1 },
-      { id: 'other', name: 'Other', icon: '🤖', engineId: 'claude', baseDir: otherDir, createdAt: 2 }
+      { id: 'other', name: 'Other', icon: '🤖', engineId: 'claude', baseDir: otherDir, createdAt: 2 },
+      { id: 'codex', name: 'Codex', icon: '🤖', engineId: 'codex', baseDir, createdAt: 3 }
     ]
   })
 )
@@ -128,6 +129,29 @@ assert.deepStrictEqual(
   { removed: 0, bytes: 0, failed: 0 },
   'an unknown assistant deletes nothing'
 )
+// memory is a Claude concept: another engine's assistant has none to clear, and
+// this one shares a baseDir, so a missing guard would wipe the neighbour's files
+await fs.writeFile(path.join(mineMem, 'back.md'), 'written again')
+assert.deepStrictEqual(
+  await clearMemories('codex'),
+  { removed: 0, bytes: 0, failed: 0 },
+  'a non-claude assistant has no memory to clear'
+)
+assert.deepStrictEqual(
+  (await fs.readdir(mineMem)).sort(),
+  ['back.md', 'notes.txt'],
+  'and it deleted nothing'
+)
+
+// a transcript that cannot be removed is counted, not reported as absent
+const locked = path.join(projects, '-locked-project')
+await fs.mkdir(locked, { recursive: true })
+await fs.writeFile(path.join(locked, 'stuck-id.jsonl'), '{}')
+await fs.chmod(locked, 0o500)
+const lockedResult = await deleteTranscript('stuck-id')
+await fs.chmod(locked, 0o700)
+assert.strictEqual(lockedResult.removed, 0, 'a locked transcript is not removed')
+assert.strictEqual(lockedResult.failed, 1, 'and the failure is counted, not silently ignored')
 
 await fs.rm(home, { recursive: true, force: true })
 await fs.rm(out, { force: true })

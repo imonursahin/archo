@@ -233,6 +233,173 @@ const createBlock = slice("ipcMain.on('pty:create'", "ipcMain.on('pty:write'", '
 assert.match(createBlock, /pendingTitle\.set/, 'a launch in a named tab must arm the rename')
 assert.match(createBlock, /GENERIC_TAB_NAME_RE/, 'invented names must be filtered at launch too')
 
+// ------------------------------------------------------- the pending-title queue
+// forgetPendingTitle and syncClaudeTitle are plain map bookkeeping, so they can
+// be run for real once the type annotations are stripped off the slice.
+const stripTypes = (s) => s.replace(/:\s*(?:string|void|boolean|number)\b/g, '')
+const queueBlock = stripTypes(
+  slice('function forgetPendingTitle(', '// Poll for the first quiet moment', 'the pending-title queue')
+)
+const makeQueue = (deliverable) => {
+  const pendingTitle = new Map()
+  const titleTimers = new Map()
+  const drained = []
+  const { syncClaudeTitle, forgetPendingTitle } = new Function(
+    'deps',
+    `const { GENERIC_TAB_NAME_RE, pendingTitle, titleTimers, sendRename, drainPendingTitle } = deps
+     ${queueBlock}
+     return { syncClaudeTitle, forgetPendingTitle }`
+  )({
+    GENERIC_TAB_NAME_RE: genericRe,
+    pendingTitle,
+    titleTimers,
+    sendRename: () => deliverable,
+    drainPendingTitle: (id) => drained.push(id)
+  })
+  return { pendingTitle, titleTimers, drained, syncClaudeTitle, forgetPendingTitle }
+}
+
+// A name Archo invented must not merely be ignored — it must cancel a real name
+// that is still queued, or "Terminal 3" gets overwritten by a rename the user
+// already moved on from, landing in a conversation that is no longer that tab.
+let q = makeQueue(false)
+q.pendingTitle.set('t1', 'PA-41439')
+q.syncClaudeTitle('t1', 'Terminal 3')
+assert.strictEqual(q.pendingTitle.has('t1'), false, 'a generic rename must clear the queued name')
+assert.strictEqual(q.drained.length, 0, 'a generic rename must not arm a delivery chain')
+
+// an undeliverable real name is held and a chain is armed for it
+q = makeQueue(false)
+q.syncClaudeTitle('t2', 'PA-41439')
+assert.strictEqual(q.pendingTitle.get('t2'), 'PA-41439', 'an undeliverable name must be held')
+assert.deepStrictEqual(q.drained, ['t2'], 'holding a name must arm the retry chain')
+
+// a name delivered straight away leaves nothing queued behind it
+q = makeQueue(true)
+q.syncClaudeTitle('t3', 'PA-41439')
+assert.strictEqual(q.pendingTitle.has('t3'), false, 'a delivered name must not stay queued')
+assert.strictEqual(q.drained.length, 0, 'a delivered name needs no retry chain')
+
+// ---------------------------------------------------------- drainPendingTitle
+// The retry chain types into a live terminal on a timer with nobody watching.
+// Two properties keep that safe, and neither is observable from the queue test:
+// it gives up after a minute, and there is only ever one chain per terminal.
+const drainBlock = slice('function drainPendingTitle(', '\n}', 'the pending-title drain')
+assert.match(drainBlock, /deadlineMs = 60_000/, 'the one-minute deadline is the give-up point')
+assert.match(
+  drainBlock,
+  /^[\s\S]*?clearTimeout\(titleTimers\.get\(terminalId\)\)[\s\S]*?setTimeout/,
+  'the previous chain must be cleared before a new one is armed — one chain per terminal'
+)
+assert.match(
+  drainBlock,
+  /Date\.now\(\)\s*>\s*stopAt/,
+  'past the deadline the name must be dropped, not retried forever'
+)
+assert.match(
+  drainBlock,
+  /stopAt[\s\S]*?pendingTitle\.delete\(terminalId\)/,
+  'a dropped name must leave the queue, or it is retried by the next chain'
+)
+
+// ------------------------------------------------------ terminal:claudeId shape
+// Three return values, and the renderer branches on all three: a session id
+// opens the close modal with a transcript to erase, '' opens it with nothing to
+// erase (claude ran but never registered an id), null skips the modal entirely.
+// Collapsing '' to null silently stops offering to clean up after a crashed run.
+const AsyncFunction = (async () => {}).constructor
+const claudeIdBlock = slice(
+  '    const s = await getSession(sessionId)\n    const t = s?.terminals',
+  "\n  })\n  handle('claude:deleteTranscript'",
+  'the terminal:claudeId handler body'
+)
+const claudeId = new AsyncFunction('sessionId', 'terminalId', 'getSession', claudeIdBlock)
+const sessionOf = (terminals) => async () => ({ terminals })
+
+assert.strictEqual(
+  await claudeId('s', 't', sessionOf([{ id: 't', claudeSessionId: 'abc', ranClaude: true }])),
+  'abc',
+  'a known transcript id is returned as-is'
+)
+assert.strictEqual(
+  await claudeId('s', 't', sessionOf([{ id: 't', ranClaude: true }])),
+  '',
+  "claude ran but left no id — '' still opens the modal"
+)
+assert.strictEqual(
+  await claudeId('s', 't', sessionOf([{ id: 't', ranClaude: false }])),
+  null,
+  'a terminal that never ran claude must return null so no modal appears'
+)
+assert.strictEqual(
+  await claudeId('s', 'missing', sessionOf([{ id: 't', ranClaude: true }])),
+  null,
+  'an unknown terminal must return null, not the empty-string case'
+)
+assert.strictEqual(
+  await claudeId('s', 't', async () => undefined),
+  null,
+  'a missing session must return null'
+)
+
+// ------------------------------------------------- claude:deleteTranscript passes
+// Claude flushes its transcript back to disk on the way out, so a single delete
+// can be undone by the process it just killed. Two passes with a settle in
+// between, and the SECOND pass decides whether anything is still there.
+const deleteBlock = slice(
+  '    const s = await getSession(sessionId)\n    const id',
+  "\n  })\n  handle('memories:clear'",
+  'the claude:deleteTranscript handler body'
+)
+const deleteHandler = new AsyncFunction(
+  'sessionId',
+  'terminalId',
+  'getSession',
+  'deleteTranscript',
+  deleteBlock
+)
+
+// no transcript id: the handler must not call the deleter at all
+let passes = []
+let res = await deleteHandler('s', 't', sessionOf([{ id: 't', ranClaude: true }]), () => {
+  passes.push(Date.now())
+  return { removed: 1, failed: 0 }
+})
+assert.deepStrictEqual(
+  res,
+  { hadId: false, removed: 0, failed: 0 },
+  'without an id the handler reports hadId:false and deletes nothing'
+)
+assert.strictEqual(passes.length, 0, 'without an id nothing must be deleted')
+
+// with an id: two passes, separated by the settle, and the counts combine
+passes = []
+const results = [
+  { removed: 1, failed: 3 },
+  { removed: 2, failed: 0 }
+]
+res = await deleteHandler('s', 't', sessionOf([{ id: 't', claudeSessionId: 'abc' }]), () => {
+  passes.push(Date.now())
+  return results[passes.length - 1]
+})
+assert.strictEqual(passes.length, 2, 'a single pass loses whatever claude flushed on shutdown')
+assert.ok(passes[1] - passes[0] >= 550, `the second pass must wait out the flush (${passes[1] - passes[0]}ms)`)
+assert.strictEqual(res.hadId, true)
+assert.strictEqual(res.removed, 3, 'removed counts both passes')
+assert.strictEqual(
+  res.failed,
+  0,
+  'failed comes from the second pass only — a file the first pass failed on and the second removed is not a failure'
+)
+
+// and a file that survives both passes is still reported as failed
+passes = []
+res = await deleteHandler('s', 't', sessionOf([{ id: 't', claudeSessionId: 'abc' }]), () => {
+  passes.push(Date.now())
+  return { removed: 0, failed: 2 }
+})
+assert.strictEqual(res.failed, 2, 'a transcript still on disk after both passes must be reported')
+
 console.log(
   'ok — main handler logic: clone target, plugins dispatch, prune join, export count, title sync'
 )

@@ -166,9 +166,11 @@ export async function deleteTranscript(
       await fs.rm(file)
       out.removed++
     } catch (e) {
-      // "it was not in this project" is the normal case; anything else means
-      // the file is there and stayed there — a locked or read-only transcript
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') out.failed++
+      // "not in this project" is the normal case (ENOTDIR: a stray file sits
+      // among the project folders); anything else means the transcript is there
+      // and stayed there — locked, read-only, or held open
+      const code = (e as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') out.failed++
     }
   }
   return out

@@ -20,16 +20,39 @@ const ptyStub = path.join(tmp, 'pty-stub.mjs')
 await fs.writeFile(
   ptyStub,
   `globalThis.__spawns = []
+globalThis.__disposed = 0
 export function spawn(file, args, opts) {
-  globalThis.__spawns.push({ file, args, opts })
-  return {
+  const exits = []
+  const proc = {
     pid: 4242,
-    onData() {},
-    onExit() {},
-    write() {},
+    writes: [],
+    onData() {
+      return { dispose() {} }
+    },
+    // the real IPty hands back a disposable; killTermAndWait relies on it to
+    // let go of its listener, so the stub has to model that too
+    onExit(fn) {
+      exits.push(fn)
+      return {
+        dispose() {
+          globalThis.__disposed++
+          const i = exits.indexOf(fn)
+          if (i >= 0) exits.splice(i, 1)
+        }
+      }
+    },
+    write(d) {
+      proc.writes.push(d)
+    },
     resize() {},
-    kill() {}
+    kill() {},
+    // fire the exit the real pty would fire when the process actually dies
+    fireExit(exitCode = 0) {
+      for (const fn of exits.slice()) fn({ exitCode })
+    }
   }
+  globalThis.__spawns.push({ file, args, opts, proc })
+  return proc
 }
 export default { spawn }
 `
@@ -58,6 +81,10 @@ const {
   liveTermIds,
   isLive,
   writeTerm,
+  writeSystem,
+  idleMs,
+  outputSinceInputMs,
+  killTermAndWait,
   resizeTerm,
   foreground,
   recentOutput,
@@ -212,6 +239,71 @@ killAll()
 assert.deepStrictEqual(liveTermIds(), [], 'killAll must leave nothing live')
 assert.strictEqual(isLive('a1'), false)
 assert.doesNotThrow(() => killAll(), 'killAll with nothing live must not throw')
+
+// ======================================================== writeSystem vs writeTerm
+// Both reach the pty; only one of them is the user. A /rename Archo delivers
+// itself must not stamp lastInput, or "nobody has typed here" is never true
+// again and the unattended rename path stops firing for that terminal forever.
+createTerm(fakeWin, 'sys', { cwd: tmp })
+const sysProc = lastSpawn().proc
+writeSystem('sys', '/rename PA-1\r')
+assert.deepStrictEqual(sysProc.writes, ['/rename PA-1\r'], 'writeSystem must reach the pty')
+assert.strictEqual(
+  outputSinceInputMs('sys'),
+  Infinity,
+  'writeSystem must not count as the user typing'
+)
+writeTerm('sys', 'ls\n')
+assert.deepStrictEqual(
+  sysProc.writes,
+  ['/rename PA-1\r', 'ls\n'],
+  'writeTerm must reach the same pty'
+)
+assert.notStrictEqual(
+  outputSinceInputMs('sys'),
+  Infinity,
+  'writeTerm must stamp lastInput — it is the user'
+)
+assert.doesNotThrow(() => writeSystem('gone', 'x'), 'writeSystem to a dead id must not throw')
+
+// ======================================================================= idleMs
+// The rename readiness check gates on this, so a fresh terminal must read as
+// recently-active rather than as never having produced anything.
+assert.ok(idleMs('sys') >= 0, 'idleMs is never negative')
+assert.ok(idleMs('sys') < 5000, 'a freshly created terminal must not look long-idle')
+assert.strictEqual(idleMs('gone'), Infinity, 'an unknown id has been idle forever')
+
+// ========================================================== outputSinceInputMs
+// Three branches, and the two Infinity ones mean the opposite of each other to
+// the caller: unknown terminal vs. a terminal nobody has typed into yet.
+assert.strictEqual(outputSinceInputMs('gone'), Infinity, 'an unknown id yields Infinity')
+createTerm(fakeWin, 'never', { cwd: tmp })
+assert.strictEqual(outputSinceInputMs('never'), Infinity, 'lastInput === 0 yields Infinity')
+writeTerm('never', 'a')
+assert.strictEqual(typeof outputSinceInputMs('never'), 'number')
+assert.notStrictEqual(outputSinceInputMs('never'), Infinity, 'after typing it is a real gap')
+killTerm('never')
+killTerm('sys')
+
+// ============================================================== killTermAndWait
+// The delete-transcript path kills the terminal and waits before erasing, so
+// that claude's shutdown flush cannot restore what was just deleted. A promise
+// that resolves early makes the delete race the flush again.
+const disposedBefore = globalThis.__disposed
+await killTermAndWait('gone') // an unknown id resolves rather than hanging 3s
+assert.strictEqual(globalThis.__disposed, disposedBefore, 'an unknown id registers no listener')
+
+createTerm(fakeWin, 'kaw', { cwd: tmp })
+const kawProc = lastSpawn().proc
+let settled = false
+const waiting = killTermAndWait('kaw').then(() => (settled = true))
+await new Promise((r) => setImmediate(r))
+assert.strictEqual(settled, false, 'it must not resolve before the pty reports its exit')
+kawProc.fireExit(0)
+await waiting
+assert.strictEqual(settled, true, 'onExit must resolve the wait')
+assert.ok(globalThis.__disposed > disposedBefore, 'the exit listener must be disposed')
+assert.strictEqual(isLive('kaw'), false, 'the terminal is gone once the wait resolves')
 
 await fs.rm(tmp, { recursive: true, force: true })
 console.log('ok — terminal spawn shape, live-terminal list and session accessors')

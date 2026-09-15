@@ -45,4 +45,19 @@ const seen = new Set()
 const twice = dupes.filter((c) => (seen.has(c) ? true : (seen.add(c), false)))
 assert.deepStrictEqual(twice, [], `channel handled more than once: ${twice.join(', ')}`)
 
-console.log(`ok — ipc parity (${invoked.size} invoked, ${handled.size} handled)`)
+// ------------------------------------------- fire-and-forget channels too
+// ipcRenderer.send has no reply, so a channel main never listens on fails
+// silently: the OSC colour answer or a keystroke simply never arrives
+const sent = all(preloadSrc, /ipcRenderer\.send\(\s*['"]([^'"]+)['"]/g)
+const listened = all(mainSrc, /ipcMain\.on\(\s*['"]([^'"]+)['"]/g)
+assert.ok(sent.size >= 3, `preload send scan found only ${sent.size} channels — regex is stale`)
+const unheard = [...sent].filter((c) => !listened.has(c)).sort()
+assert.deepStrictEqual(
+  unheard,
+  [],
+  `preload sends channels main never listens on: ${unheard.join(', ')}`
+)
+
+console.log(
+  `ok — ipc parity (${invoked.size} invoked, ${handled.size} handled, ${sent.size} sent)`
+)
