@@ -187,8 +187,8 @@ assert.strictEqual(fillVars('a{{x}}b', { x: '' }), 'ab', "an empty value must su
 assert.strictEqual(fillVars('{{x}}', { x: '0' }), '0', "'0' must substitute")
 
 // ---------------------------------------------------------------- fmtSize
-const settingsSrc = await read('src/renderer/src/components/SettingsModal.tsx')
-const { fmtSize } = load(grab(settingsSrc, 'fmtSize'), ['fmtSize'])
+// shared by the log cleanup and the memory cleanup, so it lives in lib/format
+const { fmtSize } = load(grab(await read('src/renderer/src/lib/format.ts'), 'fmtSize'), ['fmtSize'])
 
 // below a kilobyte the raw count is shown, with no decimal
 assert.strictEqual(fmtSize(0), '0 B')

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+**Added**
+- Closing a terminal that has been running Claude now asks what you mean by it: close the terminal and keep the conversation, or delete the conversation outright. Deleting removes the transcript from Claude's own store along with the terminal's recorded scrollback, so `/resume` will not find it again. A terminal that never ran Claude closes as before, with no question.
+- **Clear an assistant's memory.** The Memories group in the sidebar gets a "clear all memories" action: it deletes every memory file, the `MEMORY.md` index included, from Claude's store. Only that assistant's memory is touched, and only `.md` files.
+
+**Fixed**
+- A tab name now reaches the Claude conversation running in it. The rename was only sent at the moment you renamed the tab, so naming a tab before starting Claude — the usual order — never reached the conversation and was dropped silently. The name is now held and delivered as soon as Claude is there to take it, including right after a launch, and the send waits for the screen to settle so it cannot land in a half-written message. Names Archo invents itself ("Terminal 3") are not sent.
+
 ## 0.2.0
 
 **Added**

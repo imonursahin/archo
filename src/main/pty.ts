@@ -228,7 +228,7 @@ export function createTerm(
     rec,
     buffer: '',
     seq: 0,
-    lastData: 0,
+    lastData: Date.now(),
     burstStart: 0,
     burstBytes: 0,
     inputBytes: 0,
@@ -310,12 +310,35 @@ export function writeTerm(id: string, data: string): void {
   t?.proc.write(data)
 }
 
+// Writes Archo makes itself — an OSC colour answer, a /rename it delivers. They
+// must not count as the user typing, or "nobody has typed here" is never true.
+export function writeSystem(id: string, data: string): void {
+  terms.get(id)?.proc.write(data)
+}
+
 export function resizeTerm(id: string, cols: number, rows: number): void {
   try {
     terms.get(id)?.proc.resize(cols, rows)
   } catch {
     /* ignore */
   }
+}
+
+export function killTermAndWait(id: string, timeoutMs = 3000): Promise<void> {
+  const t = terms.get(id)
+  if (!t) return Promise.resolve()
+  return new Promise((resolve) => {
+    const done = t.proc.onExit(() => {
+      clearTimeout(timer)
+      done.dispose()
+      resolve()
+    })
+    const timer = setTimeout(() => {
+      done.dispose()
+      resolve()
+    }, timeoutMs)
+    killTerm(id)
+  })
 }
 
 export function killTerm(id: string): void {
@@ -329,6 +352,22 @@ export function killTerm(id: string): void {
     t.rec?.end()
     terms.delete(id)
   }
+}
+
+// How long this terminal has been quiet. Infinity when it has no live pty.
+export function idleMs(id: string): number {
+  const t = terms.get(id)
+  return t ? Date.now() - t.lastData : Infinity
+}
+
+// How far the program's own output outlived the user's last keystroke. While a
+// message is being composed the echo of every key IS the output, so the two
+// timestamps stay together; a big gap means the program has repainted the screen
+// on its own since the user stopped typing. Infinity when they never typed.
+export function outputSinceInputMs(id: string): number {
+  const t = terms.get(id)
+  if (!t) return Infinity
+  return t.lastInput ? t.lastData - t.lastInput : Infinity
 }
 
 // terminal ids with a live pty (and therefore an open recording stream)

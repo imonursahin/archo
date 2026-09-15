@@ -15,6 +15,7 @@ interface Props {
   onNew: (kind?: 'skill' | 'agent' | 'command') => void
   onUsage: () => void
   onManagePlugins: () => void
+  onClearMemories: () => void
   onDelete: (item: ResourceItem) => void
   onDuplicate: (item: ResourceItem) => void
   onTogglePlugin: (item: ResourceItem, enabled: boolean) => void
@@ -55,6 +56,7 @@ export default function Sidebar({
   onNew,
   onUsage,
   onManagePlugins,
+  onClearMemories,
   onDelete,
   onDuplicate,
   onTogglePlugin,
@@ -338,6 +340,11 @@ export default function Sidebar({
                 <span className="count">{items.length}</span>
               </div>
               {!isCollapsed && items.map((item) => renderItem(item, def.tag, dragCtx))}
+              {!isCollapsed && def.key === 'memories' && items.length > 0 && (
+                <div className="new-btn" onClick={onClearMemories}>
+                  ⌫ {t('clearMemories')}
+                </div>
+              )}
               {!isCollapsed && def.key === 'plugins' && (
                 <div className="new-btn" onClick={onManagePlugins}>
                   ⚙ {t('pluginsManage')}

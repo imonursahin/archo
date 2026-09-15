@@ -199,4 +199,40 @@ assert.match(
   'a cancelled save dialog must report failure'
 )
 
-console.log('ok — main handler logic: clone target, plugins dispatch, prune join, export count')
+// ------------------------------------------------ the tab name → /rename sync
+// A tab named after a ticket must reach the conversation, and a name Archo
+// invented must not: renaming every conversation to "Terminal 3" would bury the
+// ones the developer actually titled.
+const genericRe = new Function(
+  `${slice('const GENERIC_TAB_NAME_RE =', '\n\n', 'the generic tab name pattern')}\nreturn GENERIC_TAB_NAME_RE`
+)()
+for (const generic of ['claude', 'Claude', 'Terminal', 'Terminal 3', 'terminal 12'])
+  assert.ok(genericRe.test(generic), `"${generic}" is an invented name, not a title`)
+for (const real of ['PA-41439', 'MB-9543 fix', 'claude review', 'terminal cleanup'])
+  assert.ok(!genericRe.test(real), `"${real}" is a name the developer typed`)
+
+// The rename is typed into Claude's input box, so all three conditions must
+// hold — foreground process, not mid-answer, and output settled.
+const readyBlock = slice('function titleReady(', '\n}', 'the rename readiness check')
+assert.match(readyBlock, /foreground\(terminalId\)/, 'Claude must own the terminal')
+assert.match(readyBlock, /CLAUDE_BUSY_RE/, 'a mid-answer terminal must not be typed into')
+assert.match(readyBlock, /idleMs\(terminalId\)\s*>/, 'the screen must have settled first')
+// an unattended delivery fires with nobody watching, so it additionally refuses
+// any terminal that has ever been typed into
+assert.match(
+  readyBlock,
+  /!unattended\s*\|\|\s*outputSinceInputMs\(terminalId\)\s*>/,
+  'the unattended path must require output that outlived the last keystroke'
+)
+
+// A name that could not be delivered is held, not dropped — that is the whole
+// point: the tab is usually named before Claude is running in it.
+const syncBlock = slice('function syncClaudeTitle(', '\n}', 'the title sync')
+assert.match(syncBlock, /pendingTitle\.set/, 'an undeliverable name must be held')
+const createBlock = slice("ipcMain.on('pty:create'", "ipcMain.on('pty:write'", 'the pty:create handler')
+assert.match(createBlock, /pendingTitle\.set/, 'a launch in a named tab must arm the rename')
+assert.match(createBlock, /GENERIC_TAB_NAME_RE/, 'invented names must be filtered at launch too')
+
+console.log(
+  'ok — main handler logic: clone target, plugins dispatch, prune join, export count, title sync'
+)

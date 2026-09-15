@@ -197,6 +197,7 @@ import {
   exportAssistant,
   importAssistant,
   registerAssistant,
+  clearMemories,
   bridgeStatus,
   linkSkills,
   unlinkSkills,
@@ -206,7 +207,8 @@ import {
   listSessions,
   readSession,
   searchTranscripts,
-  detectClaudeSession
+  detectClaudeSession,
+  deleteTranscript
 } from './claude'
 import {
   setToolsPaths,
@@ -291,10 +293,14 @@ import {
 import {
   createTerm,
   writeTerm,
+  writeSystem,
   resizeTerm,
   killTerm,
+  killTermAndWait,
   killAll,
   liveTermIds,
+  idleMs,
+  outputSinceInputMs,
   isLive,
   snapshot,
   foreground,
@@ -398,15 +404,79 @@ const CLAUDE_BUSY_RE = /esc to interrupt|ctrl-c to interrupt|Do you want|❯\s*\
 // /rename is a slash command; only while Claude is the foreground process and
 // showing an ordinary input box — at a shell prompt the same line would just be
 // an unknown command.
-// ponytail: a rename typed while an unsent message is half-written in Claude's
-// input box appends to it; deferring until the box is empty needs state the pty
-// doesn't expose. Renaming from the tab is skipped, not queued, when in doubt.
-function syncClaudeTitle(terminalId: string, name: string): void {
-  if (!/claude/i.test(foreground(terminalId))) return
-  if (CLAUDE_BUSY_RE.test(recentOutput(terminalId))) return
+// A name that cannot be delivered right now is queued and retried for a minute,
+// then dropped. Delivery waits for a terminal the developer is not typing in.
+// Names Archo invents for a terminal nobody has titled — renaming a Claude
+// conversation to one of these tells the user nothing in /resume.
+const GENERIC_TAB_NAME_RE = /^(claude|terminal(\s+\d+)?)$/i
+
+// The rename the terminal is still owed, kept until a Claude is actually there
+// to receive it (named before launch, or renamed while Claude was mid-answer).
+const pendingTitle = new Map<string, string>()
+const titleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+// Two different moments, two different bars. A rename the developer just typed
+// into the tab is theirs: they are looking at the terminal, so the shipped
+// behaviour (Claude in front, not mid-answer, screen settled) is enough. A
+// queued delivery fires on a timer with nobody watching, so it additionally
+// requires the program to have painted the screen well after the last keystroke
+// — that is what separates "claude was typed and then drew its own UI" from "a
+// message is half-written in the box", where the echo keeps the two together.
+function titleReady(terminalId: string, unattended: boolean): boolean {
+  return (
+    /claude/i.test(foreground(terminalId)) &&
+    !CLAUDE_BUSY_RE.test(recentOutput(terminalId)) &&
+    idleMs(terminalId) > 1200 &&
+    (!unattended || outputSinceInputMs(terminalId) > 1500)
+  )
+}
+
+function sendRename(terminalId: string, name: string, unattended: boolean): boolean {
+  if (!titleReady(terminalId, unattended)) return false
   // eslint-disable-next-line no-control-regex
   const clean = name.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)
-  if (clean) writeTerm(terminalId, `/rename ${clean}\r`)
+  if (!clean) return false
+  writeSystem(terminalId, `/rename ${clean}\r`)
+  return true
+}
+
+function forgetPendingTitle(terminalId: string): void {
+  pendingTitle.delete(terminalId)
+  clearTimeout(titleTimers.get(terminalId))
+  titleTimers.delete(terminalId)
+}
+
+function syncClaudeTitle(terminalId: string, name: string): void {
+  if (GENERIC_TAB_NAME_RE.test(name.trim())) {
+    forgetPendingTitle(terminalId)
+    return
+  }
+  if (sendRename(terminalId, name, false)) {
+    forgetPendingTitle(terminalId)
+    return
+  }
+  // Claude is busy, or is not running here yet — hold the name and let the
+  // next launch (or the next quiet moment) deliver it.
+  pendingTitle.set(terminalId, name)
+  drainPendingTitle(terminalId)
+}
+
+// Poll for the first quiet moment with Claude in the foreground, then deliver
+// the held name. Gives up rather than typing into whatever came up instead.
+function drainPendingTitle(terminalId: string, deadlineMs = 60_000): void {
+  clearTimeout(titleTimers.get(terminalId)) // one chain per terminal, newest wins
+  const stopAt = Date.now() + deadlineMs
+  const tick = (): void => {
+    const name = pendingTitle.get(terminalId)
+    if (!name) return
+    if (sendRename(terminalId, name, true) || Date.now() > stopAt) {
+      pendingTitle.delete(terminalId)
+      titleTimers.delete(terminalId)
+      return
+    }
+    titleTimers.set(terminalId, setTimeout(tick, 1000))
+  }
+  titleTimers.set(terminalId, setTimeout(tick, 1000))
 }
 
 function registerIpc(): void {
@@ -680,6 +750,28 @@ function registerIpc(): void {
   handle('terminal:remove', (sessionId: string, terminalId: string) =>
     removeTerminal(sessionId, terminalId)
   )
+  // Closing a tab keeps the conversation; this is the explicit "erase it" path.
+  handle('terminal:claudeId', async (sessionId: string, terminalId: string) => {
+    const s = await getSession(sessionId)
+    const t = s?.terminals.find((x) => x.id === terminalId)
+    return t?.claudeSessionId || (t?.ranClaude ? '' : null)
+  })
+  handle('claude:deleteTranscript', async (sessionId: string, terminalId: string) => {
+    const s = await getSession(sessionId)
+    const id = s?.terminals.find((x) => x.id === terminalId)?.claudeSessionId
+    if (!id) return { hadId: false, removed: 0, failed: 0 }
+    const first = await deleteTranscript(id)
+    // claude can flush its transcript back to disk while it shuts down, so look
+    // again once the dust settles rather than trusting the first pass
+    await new Promise((r) => setTimeout(r, 600))
+    const second = await deleteTranscript(id)
+    return {
+      hadId: true,
+      removed: first.removed + second.removed,
+      failed: second.failed
+    }
+  })
+  handle('memories:clear', (id: string) => clearMemories(id))
   handle('terminal:log', (sessionId: string, terminalId: string) =>
     readTerminalLog(sessionId, terminalId)
   )
@@ -854,10 +946,22 @@ function registerIpc(): void {
     searchTranscripts(query, scope)
   )
   // PTY
-  ipcMain.on('pty:create', (_e, id: string, opts) => {
-    if (mainWindow) createTerm(mainWindow, id, opts || {})
+  ipcMain.on('pty:create', async (_e, id: string, opts) => {
+    if (!mainWindow) return
+    createTerm(mainWindow, id, opts || {})
+    // A conversation started in a named tab takes that name, so /resume lists
+    // the ticket you typed instead of a generated title. The rename waits for
+    // Claude's input box: it is typed input, not an API call.
+    const info = await findTerminal(id).catch(() => null)
+    if (info && !GENERIC_TAB_NAME_RE.test(info.terminalName.trim())) {
+      pendingTitle.set(id, info.terminalName)
+      drainPendingTitle(id)
+    }
   })
   ipcMain.on('pty:write', (_e, id: string, data: string) => writeTerm(id, data))
+  // terminal queries the app answers for the user (OSC colour probes)
+  ipcMain.on('pty:write-system', (_e, id: string, data: string) => writeSystem(id, data))
+  handle('pty:killwait', (id: string) => killTermAndWait(id))
   ipcMain.on('pty:resize', (_e, id: string, cols: number, rows: number) =>
     resizeTerm(id, cols, rows)
   )

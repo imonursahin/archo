@@ -108,6 +108,11 @@ const api = {
     ipcRenderer.invoke('terminal:rename', sessionId, terminalId, name),
   removeTerminal: (sessionId: string, terminalId: string) =>
     ipcRenderer.invoke('terminal:remove', sessionId, terminalId),
+  terminalClaudeId: (sessionId: string, terminalId: string) =>
+    ipcRenderer.invoke('terminal:claudeId', sessionId, terminalId),
+  deleteClaudeTranscript: (sessionId: string, terminalId: string) =>
+    ipcRenderer.invoke('claude:deleteTranscript', sessionId, terminalId),
+  clearMemories: (id: string) => ipcRenderer.invoke('memories:clear', id),
   readTerminalLog: (sessionId: string, terminalId: string) =>
     ipcRenderer.invoke('terminal:log', sessionId, terminalId),
   terminalLogPath: (sessionId: string, terminalId: string) =>
@@ -183,6 +188,8 @@ const api = {
   // pty
   ptyCreate: (id: string, opts: object) => ipcRenderer.send('pty:create', id, opts),
   ptyWrite: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
+  ptyWriteSystem: (id: string, data: string) => ipcRenderer.send('pty:write-system', id, data),
+  ptyKillAndWait: (id: string) => ipcRenderer.invoke('pty:killwait', id),
   ptyResize: (id: string, cols: number, rows: number) =>
     ipcRenderer.send('pty:resize', id, cols, rows),
   ptyKill: (id: string) => ipcRenderer.send('pty:kill', id),

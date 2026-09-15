@@ -423,6 +423,35 @@ const DICT: Record<string, { en: string; tr: string }> = {
   marketRemoved: { en: 'Marketplace removed', tr: 'Marketplace kaldırıldı' },
   marketUpdated: { en: 'Marketplace updated', tr: 'Marketplace güncellendi' },
   add: { en: 'Add', tr: 'Ekle' },
+  clearMemories: { en: 'clear all memories', tr: 'tüm hafızayı temizle' },
+  confirmClearMemories: {
+    en: 'Delete everything this assistant remembers? The memory files are removed from Claude\'s store for good.',
+    tr: 'Bu asistanın hatırladığı her şey silinsin mi? Memory dosyaları Claude\'un deposundan kalıcı olarak kaldırılır.'
+  },
+  toastMemoriesPartial: {
+    en: '{n} memory files deleted, {failed} could not be removed',
+    tr: '{n} memory dosyası silindi, {failed} tanesi kaldırılamadı'
+  },
+  toastMemoriesCleared: {
+    en: '{n} memory files deleted — {size} freed',
+    tr: '{n} memory dosyası silindi — {size} boşaldı'
+  },
+  closeTermTitle: { en: 'Closing "{name}"', tr: '"{name}" kapatılıyor' },
+  closeTermSub: {
+    en: 'The Claude conversation in this terminal stays on disk unless you delete it. Deleting removes the conversation and its messages for good — /resume will not find it again.',
+    tr: 'Bu terminaldeki Claude konuşması, silmedikçe diskte kalır. Silersen konuşma ve mesajları tamamen gider, /resume bir daha bulamaz.'
+  },
+  closeTermKeep: { en: 'Close terminal', tr: 'Terminali kapat' },
+  closeTermDelete: { en: 'Delete conversation', tr: 'Konuşmayı sil' },
+  toastConversationDeleted: { en: 'Conversation deleted', tr: 'Konuşma silindi' },
+  toastConversationDeleteFailed: {
+    en: 'The conversation could not be deleted — the file is locked or read-only',
+    tr: 'Konuşma silinemedi — dosya kilitli ya da salt okunur'
+  },
+  toastConversationNotFound: {
+    en: 'Terminal closed — no stored conversation to delete',
+    tr: 'Terminal kapandı — silinecek kayıtlı konuşma yok'
+  },
   shareAssistant: { en: 'Share with git', tr: "Git ile paylaş" },
   cloneAssistant: { en: 'Clone an assistant from git', tr: "Git'ten assistant klonla" },
   clone: { en: 'Clone', tr: 'Klonla' },

@@ -152,6 +152,28 @@ export async function transcriptExists(id: string): Promise<boolean> {
   return false
 }
 
+// Erase a conversation from Claude's own store. Same unscoped search as
+// transcriptExists: the terminal's cwd is not necessarily where claude ran.
+export async function deleteTranscript(
+  id: string
+): Promise<{ removed: number; failed: number }> {
+  const out = { removed: 0, failed: 0 }
+  if (!/^[\w-]+$/.test(id)) return out
+  const projectsDir = path.join(CLAUDE_DIR, 'projects')
+  for (const proj of await safeReadDir(projectsDir)) {
+    const file = path.join(projectsDir, proj, `${id}.jsonl`)
+    try {
+      await fs.rm(file)
+      out.removed++
+    } catch (e) {
+      // "it was not in this project" is the normal case; anything else means
+      // the file is there and stayed there — a locked or read-only transcript
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') out.failed++
+    }
+  }
+  return out
+}
+
 // All claude sessions for a cwd, newest first, touched at/after sinceMs.
 // `btime` (file creation) is reported alongside `mtime` because the two answer
 // different questions: mtime says "this conversation is alive", btime says

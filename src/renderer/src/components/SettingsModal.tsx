@@ -3,6 +3,7 @@ import { getLang, setLang, t, ti, type Lang } from '../lib/i18n'
 import { getTheme, applyTheme, type Theme } from '../lib/theme'
 import { getPrefs, setPref, type Prefs } from '../lib/prefs'
 import { toast } from '../lib/toast'
+import { fmtSize } from '../lib/format'
 
 interface Props {
   onClose: () => void
@@ -513,18 +514,6 @@ function DoctorPanel(): JSX.Element {
       {!checks && <div className="muted">{t('doctorRunning')}</div>}
     </div>
   )
-}
-
-function fmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let v = bytes / 1024
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`
 }
 
 function LogsRow(): JSX.Element {

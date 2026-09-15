@@ -3112,6 +3112,14 @@ textarea {
 .btn:active {
   transform: translateY(0.5px);
 }
+.btn.danger {
+  border-color: var(--danger, #e5534b);
+  color: var(--danger, #e5534b);
+}
+.btn.danger:hover {
+  background: var(--danger, #e5534b);
+  color: #fff;
+}
 .btn.primary {
   background: var(--accent);
   color: #fff;

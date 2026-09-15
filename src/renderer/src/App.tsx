@@ -30,6 +30,7 @@ import {
   forgetAssistant
 } from './lib/prefs'
 import { toast } from './lib/toast'
+import { fmtSize } from './lib/format'
 import type { Assistant, EngineDef, ResourceGroups, ResourceItem } from './global'
 
 export default function App(): JSX.Element {
@@ -489,6 +490,17 @@ export default function App(): JSX.Element {
           onNew={openCreate}
           onUsage={() => setShowUsage(true)}
           onManagePlugins={() => setShowPlugins(true)}
+          onClearMemories={async () => {
+            if (!active || !confirm(t('confirmClearMemories'))) return
+            const r = await window.api.clearMemories(active.id)
+            refresh()
+            toast(
+              r.failed
+                ? ti('toastMemoriesPartial', { n: r.removed, failed: r.failed })
+                : ti('toastMemoriesCleared', { n: r.removed, size: fmtSize(r.bytes) }),
+              r.removed && !r.failed ? 'success' : 'error'
+            )
+          }}
           onDelete={deleteResource}
           onDuplicate={duplicateResource}
           onTogglePlugin={togglePlugin}

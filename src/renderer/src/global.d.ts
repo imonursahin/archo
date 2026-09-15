@@ -367,6 +367,12 @@ export interface StudioApi {
   ): Promise<{ terminal: TerminalRec; logPath: string }>
   renameTerminal(sessionId: string, terminalId: string, name: string): Promise<void>
   removeTerminal(sessionId: string, terminalId: string): Promise<void>
+  terminalClaudeId(sessionId: string, terminalId: string): Promise<string | null>
+  deleteClaudeTranscript(
+    sessionId: string,
+    terminalId: string
+  ): Promise<{ hadId: boolean; removed: number; failed: number }>
+  clearMemories(id: string): Promise<{ removed: number; bytes: number; failed: number }>
   readTerminalLog(sessionId: string, terminalId: string): Promise<string>
   terminalLogPath(sessionId: string, terminalId: string): Promise<string>
   terminalIsLive(id: string): Promise<boolean>
@@ -455,6 +461,8 @@ export interface StudioApi {
   searchTranscripts(query: string, scope?: string[]): Promise<TranscriptHit[]>
   ptyCreate(id: string, opts: object): void
   ptyWrite(id: string, data: string): void
+  ptyWriteSystem(id: string, data: string): void
+  ptyKillAndWait(id: string): Promise<void>
   ptyResize(id: string, cols: number, rows: number): void
   ptyKill(id: string): void
   onPtyData(cb: (id: string, data: string, seq: number) => void): () => void

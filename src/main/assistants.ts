@@ -637,9 +637,37 @@ async function collectInstruction(baseDir: string, e: EngineDef): Promise<Resour
 // folder — it's keyed by the project cwd under ~/.claude/projects/<slug>/memory,
 // same slug scheme the transcript lookups already use. MEMORY.md is the index
 // Claude loads every session, so it's pinned to the top of the list.
+function memoryDir(baseDir: string): string {
+  return path.join(HOME, '.claude', 'projects', projectSlug(baseDir), 'memory')
+}
+
+// Wipe what this assistant remembers. The memory lives in Claude's own store,
+// not in the assistant folder, so nothing here is recoverable from the repo.
+export async function clearMemories(
+  id: string
+): Promise<{ removed: number; bytes: number; failed: number }> {
+  const r = await resolve(id)
+  if (!r || r.e.id !== 'claude') return { removed: 0, bytes: 0, failed: 0 }
+  const dir = memoryDir(r.a.baseDir)
+  const out = { removed: 0, bytes: 0, failed: 0 }
+  for (const entry of await safeReadDir(dir)) {
+    if (!entry.endsWith('.md')) continue
+    const file = path.join(dir, entry)
+    try {
+      const size = (await fs.stat(file)).size
+      await fs.rm(file)
+      out.removed++
+      out.bytes += size
+    } catch {
+      out.failed++ // read-only or locked: it is still in Claude's store
+    }
+  }
+  return out
+}
+
 async function collectMemories(baseDir: string, e: EngineDef): Promise<ResourceItem[]> {
   if (e.id !== 'claude') return []
-  const dir = path.join(HOME, '.claude', 'projects', projectSlug(baseDir), 'memory')
+  const dir = memoryDir(baseDir)
   const items: ResourceItem[] = []
   for (const entry of await safeReadDir(dir)) {
     if (!entry.endsWith('.md')) continue

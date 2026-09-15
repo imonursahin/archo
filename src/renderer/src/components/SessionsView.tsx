@@ -5,6 +5,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { bus, type OpenTermRequest } from '../lib/bus'
 import SessionTools from './SessionTools'
+import CloseTerminalModal from './CloseTerminalModal'
 import Icon from './Icon'
 import { t, ti, getLang } from '../lib/i18n'
 import { getPrefs } from '../lib/prefs'
@@ -155,11 +156,11 @@ function TermInstance({
       return `rgb:${r}${r}/${g}${g}/${b}${b}`
     }
     xterm.parser.registerOscHandler(11, (d) => {
-      if (d === '?') window.api.ptyWrite(term.id, `\x1b]11;${oscColor(theme.background)}\x07`)
+      if (d === '?') window.api.ptyWriteSystem(term.id, `\x1b]11;${oscColor(theme.background)}\x07`)
       return true
     })
     xterm.parser.registerOscHandler(10, (d) => {
-      if (d === '?') window.api.ptyWrite(term.id, `\x1b]10;${oscColor(theme.foreground)}\x07`)
+      if (d === '?') window.api.ptyWriteSystem(term.id, `\x1b]10;${oscColor(theme.foreground)}\x07`)
       return true
     })
 
@@ -552,6 +553,7 @@ export default function SessionsView({
   const [sessions, setSessions] = useState<TermSession[]>([])
   const [open, setOpen] = useState<TermSession | null>(null)
   const [active, setActive] = useState<string | null>(null)
+  const [closing, setClosing] = useState<TerminalRec | null>(null)
   const [logPaths, setLogPaths] = useState<Record<string, string>>({})
   const [editingName, setEditingName] = useState(false)
   const [editingTab, setEditingTab] = useState<string | null>(null)
@@ -810,6 +812,30 @@ export default function SessionsView({
       setActive(terminal.id)
     })
   }, [open, assistant.id])
+
+  // A terminal that carries a conversation asks before it goes: closing the tab
+  // must not take the conversation with it, and erasing it has to be deliberate.
+  async function requestClose(term: TerminalRec): Promise<void> {
+    // ask main, not this component's copy: a claude the user typed by hand is
+    // claimed in the store, and that never reaches the record we hold here
+    const claimed = open ? await window.api.terminalClaudeId(open.id, term.id) : null
+    if (claimed !== null) setClosing(term)
+    else closeTerminal(term.id)
+  }
+
+  async function closeAndDelete(term: TerminalRec): Promise<void> {
+    if (!open) return
+    // kill first and wait for the process to actually be gone: a claude still
+    // running flushes its transcript on shutdown, which would bring the
+    // conversation back moments after the delete
+    await window.api.ptyKillAndWait(term.id)
+    const r = await window.api.deleteClaudeTranscript(open.id, term.id)
+    await closeTerminal(term.id)
+    setClosing(null)
+    if (r.failed) toast(t('toastConversationDeleteFailed'), 'error')
+    else if (r.removed) toast(t('toastConversationDeleted'), 'success')
+    else toast(t('toastConversationNotFound'), 'error')
+  }
 
   async function closeTerminal(id: string): Promise<void> {
     window.api.ptyKill(id)
@@ -1186,7 +1212,7 @@ export default function SessionsView({
                     className="close"
                     onClick={(e) => {
                       e.stopPropagation()
-                      closeTerminal(t.id)
+                      void requestClose(t)
                     }}
                   >
                     ×
@@ -1235,6 +1261,17 @@ export default function SessionsView({
           </div>
         )}
       </div>
+      {closing && (
+        <CloseTerminalModal
+          name={closing.name}
+          onClose={() => setClosing(null)}
+          onCloseTab={() => {
+            closeTerminal(closing.id)
+            setClosing(null)
+          }}
+          onDeleteConversation={() => closeAndDelete(closing)}
+        />
+      )}
     </div>
   )
 }
