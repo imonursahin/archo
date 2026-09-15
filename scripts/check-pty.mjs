@@ -305,6 +305,14 @@ assert.strictEqual(settled, true, 'onExit must resolve the wait')
 assert.ok(globalThis.__disposed > disposedBefore, 'the exit listener must be disposed')
 assert.strictEqual(isLive('kaw'), false, 'the terminal is gone once the wait resolves')
 
+// a shell that ignores the kill must not hang the delete flow forever
+createTerm(fakeWin, 'stuck', { cwd: tmp })
+const stuckBefore = globalThis.__disposed
+const stuckStart = Date.now()
+await killTermAndWait('stuck', 20)
+assert.ok(Date.now() - stuckStart < 1000, 'the timeout arm must settle quickly')
+assert.ok(globalThis.__disposed > stuckBefore, 'the timeout arm must dispose its listener too')
+
 await fs.rm(tmp, { recursive: true, force: true })
 console.log('ok — terminal spawn shape, live-terminal list and session accessors')
 process.exit(0) // the module's busy-watch interval keeps the loop alive otherwise

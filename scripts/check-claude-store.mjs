@@ -143,15 +143,30 @@ assert.deepStrictEqual(
   'and it deleted nothing'
 )
 
-// a transcript that cannot be removed is counted, not reported as absent
-const locked = path.join(projects, '-locked-project')
-await fs.mkdir(locked, { recursive: true })
-await fs.writeFile(path.join(locked, 'stuck-id.jsonl'), '{}')
-await fs.chmod(locked, 0o500)
-const lockedResult = await deleteTranscript('stuck-id')
-await fs.chmod(locked, 0o700)
-assert.strictEqual(lockedResult.removed, 0, 'a locked transcript is not removed')
-assert.strictEqual(lockedResult.failed, 1, 'and the failure is counted, not silently ignored')
+// a transcript that cannot be removed is counted, not reported as absent.
+// A read-only directory denies deletion only to an ordinary user on a POSIX
+// filesystem, so the case is skipped elsewhere rather than asserted falsely.
+if (process.platform !== 'win32' && process.getuid && process.getuid() !== 0) {
+  const locked = path.join(projects, '-locked-project')
+  await fs.mkdir(locked, { recursive: true })
+  await fs.writeFile(path.join(locked, 'stuck-id.jsonl'), '{}')
+  await fs.chmod(locked, 0o500)
+  const lockedResult = await deleteTranscript('stuck-id')
+  await fs.chmod(locked, 0o700)
+  assert.strictEqual(lockedResult.removed, 0, 'a locked transcript is not removed')
+  assert.strictEqual(lockedResult.failed, 1, 'and the failure is counted, not silently ignored')
+}
+
+// F3: a stray file among the project folders is "not here", not a failure —
+// otherwise a successful delete would report that it could not be done
+await fs.writeFile(path.join(projects, 'stray.jsonl'), 'x')
+await fs.mkdir(path.join(projects, '-another-project'), { recursive: true })
+await fs.writeFile(path.join(projects, '-another-project', 'plain-id.jsonl'), '{}')
+assert.deepStrictEqual(
+  await deleteTranscript('plain-id'),
+  { removed: 1, failed: 0 },
+  'a stray file next to the project folders must not read as a failed delete'
+)
 
 await fs.rm(home, { recursive: true, force: true })
 await fs.rm(out, { force: true })
