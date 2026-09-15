@@ -83,7 +83,10 @@ jobs:
     strategy:
       fail-fast: false # let every platform report, don't cancel siblings
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # windows-2022, not windows-latest: the newer image ships Visual Studio
+        # 18, which this node-gyp reports as "unknown version undefined" and
+        # then refuses to build node-pty against.
+        os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
