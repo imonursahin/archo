@@ -9,6 +9,7 @@ export interface ResourceItem {
     | 'settings'
     | 'hook'
     | 'memory'
+    | 'file'
   name: string
   path: string | null
   description?: string

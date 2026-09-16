@@ -423,6 +423,14 @@ const DICT: Record<string, { en: string; tr: string }> = {
   marketRemoved: { en: 'Marketplace removed', tr: 'Marketplace kaldırıldı' },
   marketUpdated: { en: 'Marketplace updated', tr: 'Marketplace güncellendi' },
   add: { en: 'Add', tr: 'Ekle' },
+  newFolder: { en: 'New folder', tr: 'Yeni klasör' },
+  newFolderPrompt: { en: 'Folder name:', tr: 'Klasör adı:' },
+  removeFolder: { en: 'Remove folder', tr: 'Klasörü kaldır' },
+  confirmRemoveFolder: {
+    en: 'Remove the folder "{name}"? Nothing is deleted — what is in it goes back to the top level.',
+    tr: '"{name}" klasörü kaldırılsın mı? Hiçbir şey silinmez, içindekiler üst seviyeye döner.'
+  },
+  outsideFolders: { en: 'not in a folder', tr: 'klasör dışında' },
   clearMemories: { en: 'clear all memories', tr: 'tüm hafızayı temizle' },
   confirmClearMemories: {
     en: 'Delete everything this assistant remembers? The memory files are removed from Claude\'s store for good.',

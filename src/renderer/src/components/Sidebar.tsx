@@ -1,8 +1,17 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import type { ResourceGroups, ResourceItem } from '../global'
 import QuickUsage from './QuickUsage'
-import { t } from '../lib/i18n'
-import { getFavorites, toggleFavorite, applyOrder, setOrder } from '../lib/prefs'
+import { t, ti } from '../lib/i18n'
+import {
+  getFavorites,
+  toggleFavorite,
+  applyOrder,
+  setOrder,
+  getFolders,
+  addFolder,
+  removeFolder,
+  assignFolder
+} from '../lib/prefs'
 import Icon from './Icon'
 
 interface Props {
@@ -27,6 +36,27 @@ interface Props {
 
 // which kinds can be deleted from the sidebar
 const DELETABLE = new Set(['skill', 'agent', 'command', 'mcp', 'memory'])
+
+// only the kinds a developer collects — a folder is Archo's own grouping
+const FOLDERABLE = new Set(['skills', 'agents', 'commands'])
+
+const TAG_BY_KIND: Record<string, string> = {
+  skill: 'md',
+  agent: 'md',
+  command: 'md',
+  instruction: 'md',
+  memory: '🧠',
+  mcp: '⚡',
+  plugin: '🧩',
+  hook: '⚓',
+  settings: '⚙'
+}
+
+// a nested file is labelled by its own extension, not by its group
+function fileTag(name: string): string {
+  const ext = name.split('.').pop() || ''
+  return ext && ext !== name ? ext.slice(0, 4) : '·'
+}
 
 const GROUP_DEFS: { key: keyof ResourceGroups; label: string; tag: string }[] = [
   { key: 'instructions', label: 'Instructions', tag: 'md' },
@@ -76,6 +106,8 @@ export default function Sidebar({
   })
   const [drag, setDrag] = useState<{ path: string; group: string } | null>(null)
   const [, setOrderTick] = useState(0)
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({})
+  const [namingFolder, setNamingFolder] = useState<string | null>(null)
   const favs = getFavorites()
   void favTick // re-render trigger when favorites change
   function star(item: ResourceItem, e: MouseEvent): void {
@@ -83,6 +115,129 @@ export default function Sidebar({
     if (!item.path) return
     toggleFavorite(item.path)
     setFavTick((x) => x + 1)
+  }
+
+  // A folder is Archo's own grouping — dropping a resource in one records the
+  // membership, it never moves the file (Claude finds skills and agents only
+  // where they are).
+  function dropInFolder(group: string, folder: string | null): void {
+    if (!drag || drag.group !== group) {
+      setDrag(null)
+      return
+    }
+    assignFolder(assistantId, group, drag.path, folder)
+    setDrag(null)
+    setOrderTick((x) => x + 1)
+  }
+
+  function newFolder(group: string, name: string): void {
+    setNamingFolder(null)
+    if (!name.trim()) return
+    addFolder(assistantId, group, name)
+    setOrderTick((x) => x + 1)
+  }
+
+  function dropFolder(group: string, folder: string): void {
+    if (!confirm(ti('confirmRemoveFolder', { name: folder }))) return
+    removeFolder(assistantId, group, folder)
+    setOrderTick((x) => x + 1)
+  }
+
+  // Items in their folders first, then everything still at the top level.
+  function renderGrouped(
+    def: { key: keyof ResourceGroups; label: string; tag: string },
+    items: ResourceItem[],
+    dragCtx?: { group: string; items: ResourceItem[] }
+  ): JSX.Element[] {
+    const group = def.key as string
+    if (searching || !FOLDERABLE.has(group))
+      return items.map((item) => renderItem(item, def.tag, dragCtx))
+
+    const { names, of } = getFolders(assistantId, group)
+    const parents = items.filter((i) => i.kind !== 'file')
+    const childrenOf = new Map<string, ResourceItem[]>()
+    for (const i of items) {
+      if (i.kind !== 'file') continue
+      const under = (i.meta?.under as string) || ''
+      childrenOf.set(under, [...(childrenOf.get(under) || []), i])
+    }
+    const withChildren = (p: ResourceItem): ResourceItem[] => [
+      p,
+      ...(p.path ? childrenOf.get(p.path) || [] : [])
+    ]
+    const out: JSX.Element[] = []
+    for (const folder of names) {
+      const mine = parents.filter((i) => i.path && of[i.path] === folder)
+      const shut = collapsedFolders[`${group}:${folder}`]
+      out.push(
+        <div
+          key={`folder:${folder}`}
+          className="folder-header"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault()
+            dropInFolder(group, folder)
+          }}
+          onClick={() =>
+            setCollapsedFolders((c) => ({ ...c, [`${group}:${folder}`]: !shut }))
+          }
+        >
+          <span className="chevron">{shut ? '▸' : '▾'}</span>
+          <span className="folder-name">{folder}</span>
+          <span className="count">{mine.length}</span>
+          <span
+            className="folder-x"
+            title={t('removeFolder')}
+            onClick={(e) => {
+              e.stopPropagation()
+              dropFolder(group, folder)
+            }}
+          >
+            ×
+          </span>
+        </div>
+      )
+      if (!shut)
+        out.push(
+          ...mine.flatMap(withChildren).map((item) => renderItem(item, def.tag, dragCtx, true))
+        )
+    }
+    const loose = parents.filter((i) => !i.path || !names.includes(of[i.path])).flatMap(withChildren)
+    if (names.length)
+      out.push(
+        <div
+          key="loose-drop"
+          className="folder-loose"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault()
+            dropInFolder(group, null)
+          }}
+        >
+          {t('outsideFolders')}
+        </div>
+      )
+    out.push(...loose.map((item) => renderItem(item, def.tag, dragCtx)))
+    out.push(
+      namingFolder === group ? (
+        <input
+          key="new-folder"
+          autoFocus
+          className="folder-input"
+          placeholder={t('newFolderPrompt')}
+          onBlur={(e) => newFolder(group, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') newFolder(group, e.currentTarget.value)
+            if (e.key === 'Escape') setNamingFolder(null)
+          }}
+        />
+      ) : (
+        <div key="new-folder" className="new-btn" onClick={() => setNamingFolder(group)}>
+          ＋ {t('newFolder')}
+        </div>
+      )
+    )
+    return out
   }
 
   // reorder within a group and persist the new order
@@ -134,17 +289,6 @@ export default function Sidebar({
     return out
   }, [groups, query])
 
-  const TAG_BY_KIND: Record<string, string> = {
-    skill: 'md',
-    agent: 'md',
-    command: 'md',
-    instruction: 'md',
-    memory: '🧠',
-    mcp: '⚡',
-    plugin: '🧩',
-    hook: '⚓',
-    settings: '⚙'
-  }
   // favorites, aggregated across every group (hidden while searching)
   const favItems: ResourceItem[] = []
   if (!searching && groups) {
@@ -155,16 +299,17 @@ export default function Sidebar({
   const renderItem = (
     item: ResourceItem,
     tag: string,
-    dragCtx?: { group: string; items: ResourceItem[] }
+    dragCtx?: { group: string; items: ResourceItem[] },
+    inFolder = false
   ): JSX.Element => {
     const key = item.path || `${item.kind}:${item.name}`
     const itemKey = `${item.path}:${item.name}`
     const fav = !!item.path && favs.has(item.path)
-    const canDrag = !!dragCtx && !!item.path
+    const canDrag = !!dragCtx && !!item.path && item.kind !== 'file'
     return (
       <div
         key={key}
-        className={`item ${activeKey === itemKey ? 'active' : ''} ${
+        className={`item ${item.kind === 'file' || inFolder ? 'nested' : ''} ${activeKey === itemKey ? 'active' : ''} ${
           drag?.path === item.path ? 'dragging' : ''
         } ${canDrag ? 'draggable' : ''}`}
         draggable={canDrag}
@@ -190,7 +335,7 @@ export default function Sidebar({
         onContextMenu={(e) => openMenu(e, item)}
         title={item.description}
       >
-        <span className="tag">{tag}</span>
+        <span className="tag">{item.kind === 'file' ? fileTag(item.name) : tag}</span>
         <span className="name">{item.name}</span>
         {item.kind === 'mcp' && (
           <span
@@ -337,9 +482,9 @@ export default function Sidebar({
               >
                 <span className="chevron">{isCollapsed ? '▸' : '▾'}</span>
                 {def.label}
-                <span className="count">{items.length}</span>
+                <span className="count">{items.filter((i) => i.kind !== 'file').length}</span>
               </div>
-              {!isCollapsed && items.map((item) => renderItem(item, def.tag, dragCtx))}
+              {!isCollapsed && renderGrouped(def, items, dragCtx)}
               {!isCollapsed && def.key === 'memories' && items.length > 0 && (
                 <div className="new-btn" onClick={onClearMemories}>
                   ⌫ {t('clearMemories')}

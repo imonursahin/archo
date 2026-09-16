@@ -36,8 +36,21 @@ buildSync({
   format: 'esm',
   outfile: out
 })
-const { forgetResource, forgetAssistant, getFavorites, getOrder, setOrder, toggleFavorite } =
-  await import(pathToFileURL(out).href)
+const {
+  forgetResource,
+  forgetAssistant,
+  getFavorites,
+  getOrder,
+  setOrder,
+  toggleFavorite,
+  getFolders,
+  addFolder,
+  removeFolder,
+  assignFolder,
+  applyOrder,
+  exportAppState,
+  importAppState
+} = await import(pathToFileURL(out).href)
 
 const setup = (state) => {
   store.clear()
@@ -140,5 +153,79 @@ setup({ favorites: [] })
 toggleFavorite('/x/y.md')
 assert.deepStrictEqual(favs(), ['/x/y.md'])
 
+// ===================================================================== folders
+// A folder is Archo's own grouping: nothing on disk moves, so the record is the
+// only thing that says what belongs together.
+setup({})
+addFolder('a', 'skills', 'work')
+addFolder('a', 'skills', 'work') // the same name twice is one folder
+addFolder('a', 'skills', '  ') // a blank name is not a folder
+assert.deepStrictEqual(getFolders('a', 'skills').names, ['work'])
+
+assignFolder('a', 'skills', '/a/skill/SKILL.md', 'work')
+assert.strictEqual(getFolders('a', 'skills').of['/a/skill/SKILL.md'], 'work')
+assignFolder('a', 'skills', '/a/skill/SKILL.md', null)
+assert.strictEqual(
+  getFolders('a', 'skills').of['/a/skill/SKILL.md'],
+  undefined,
+  'null takes a resource out of every folder'
+)
+
+// removing a folder frees its members instead of losing them
+assignFolder('a', 'skills', '/a/one/SKILL.md', 'work')
+assignFolder('a', 'skills', '/a/two/SKILL.md', 'later')
+addFolder('a', 'skills', 'later')
+removeFolder('a', 'skills', 'work')
+assert.deepStrictEqual(getFolders('a', 'skills').names, ['later'])
+assert.strictEqual(getFolders('a', 'skills').of['/a/one/SKILL.md'], undefined)
+assert.strictEqual(getFolders('a', 'skills').of['/a/two/SKILL.md'], 'later', 'the other folder is untouched')
+
+// a deleted resource leaves no membership behind — recreating it at the same
+// path would otherwise drop it back into a folder it was never put in
+forgetResource('a', '/a/two/SKILL.md')
+assert.strictEqual(getFolders('a', 'skills').of['/a/two/SKILL.md'], undefined)
+
+// and a deleted skill takes the files that lived inside it
+setup({})
+addFolder('a', 'skills', 'work')
+assignFolder('a', 'skills', '/a/skill/SKILL.md', 'work')
+assignFolder('a', 'skills', '/a/skill/references/x.md', 'work')
+forgetResource('a', '/a/skill')
+assert.deepStrictEqual(getFolders('a', 'skills').of, {}, 'the whole folder goes')
+
+// a file is ordered with the resource it belongs to, never sunk to the bottom
+setup({ 'order:a:skills': ['/b/SKILL.md', '/a/SKILL.md'] })
+const ordered = applyOrder(
+  [
+    { path: '/a/SKILL.md' },
+    { path: '/a/refs/one.md', meta: { under: '/a/SKILL.md' } },
+    { path: '/b/SKILL.md' }
+  ],
+  'a',
+  'skills'
+).map((i) => i.path)
+assert.deepStrictEqual(ordered, ['/b/SKILL.md', '/a/SKILL.md', '/a/refs/one.md'])
+
+// the grouping travels with the assistant: paths go out relative to the folder
+// and come back absolute, so the same layout appears on another machine
+setup({})
+addFolder('a', 'skills', 'work')
+assignFolder('a', 'skills', '/old/base/.claude/skills/one/SKILL.md', 'work')
+const bundle = exportAppState('/old/base', 'a')
+assert.deepStrictEqual(bundle.folders.skills.names, ['work'])
+assert.deepStrictEqual(
+  bundle.folders.skills.of,
+  { '.claude/skills/one/SKILL.md': 'work' },
+  'a path leaves the machine relative to the assistant folder'
+)
+setup({})
+importAppState('/new/base', 'b', bundle)
+assert.deepStrictEqual(getFolders('b', 'skills').names, ['work'])
+assert.strictEqual(
+  getFolders('b', 'skills').of['/new/base/.claude/skills/one/SKILL.md'],
+  'work',
+  'and lands under the new folder on the way in'
+)
+
 await fs.rm(tmp, { recursive: true, force: true })
-console.log('ok — stored preference cleanup')
+console.log('ok — stored preference cleanup, sidebar folders and their export')

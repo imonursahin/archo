@@ -90,6 +90,7 @@ export interface AppStateBundle {
   prompts: SavedPrompt[]
   favorites: string[] // relative to the assistant baseDir
   order: Record<string, string[]> // group -> relative paths
+  folders?: Record<string, { names: string[]; of: Record<string, string> }> // group -> folders, paths relative
   prefs?: Prefs // global app preferences (notifications, confirmDelete…)
   theme?: string // 'dark' | 'light'
   lang?: string // 'en' | 'tr'
@@ -107,10 +108,21 @@ export function exportAppState(baseDir: string, assistantId: string): AppStateBu
     const o = getOrder(assistantId, g).map(rel).filter((x): x is string => !!x)
     if (o.length) order[g] = o
   }
+  const folders: AppStateBundle['folders'] = {}
+  for (const g of GROUP_KEYS) {
+    const s = getFolders(assistantId, g)
+    const of: Record<string, string> = {}
+    for (const [p, f] of Object.entries(s.of)) {
+      const r = rel(p)
+      if (r) of[r] = f
+    }
+    if (s.names.length) folders[g] = { names: s.names, of }
+  }
   return {
     prompts: getPrompts(),
     favorites,
     order,
+    folders,
     prefs: getPrefs(),
     theme: localStorage.getItem('theme') || 'dark',
     lang: localStorage.getItem('lang') || 'en'
@@ -133,6 +145,13 @@ export function importAppState(
   if (state.order) {
     for (const [g, arr] of Object.entries(state.order))
       setOrder(assistantId, g, arr.map((r) => prefix + r))
+  }
+  if (state.folders) {
+    for (const [g, f] of Object.entries(state.folders)) {
+      const of: Record<string, string> = {}
+      for (const [r, name] of Object.entries(f.of || {})) of[prefix + r] = name
+      setFolders(assistantId, g, { names: f.names || [], of })
+    }
   }
   if (state.prompts?.length) {
     const existing = getPrompts()
@@ -186,6 +205,62 @@ export function setOrder(assistantId: string, group: string, paths: string[]): v
   localStorage.setItem(orderKey(assistantId, group), JSON.stringify(paths))
 }
 
+// ---------- Sidebar folders (per assistant + group) ----------
+// Claude Code finds agents and commands only as flat files, and a skill only at
+// `.claude/skills/<name>/SKILL.md` — moving any of them into a subfolder makes
+// it silently invisible. So a folder is Archo's own grouping: the files stay
+// where Claude expects them and only this record says what belongs together.
+export interface FolderState {
+  names: string[] // folders in display order, including empty ones
+  of: Record<string, string> // resource path -> folder name
+}
+
+function folderKey(assistantId: string, group: string): string {
+  return `folders:${assistantId}:${group}`
+}
+
+export function getFolders(assistantId: string, group: string): FolderState {
+  try {
+    const raw = JSON.parse(localStorage.getItem(folderKey(assistantId, group)) || '{}')
+    return { names: Array.isArray(raw.names) ? raw.names : [], of: raw.of || {} }
+  } catch {
+    return { names: [], of: {} }
+  }
+}
+
+export function setFolders(assistantId: string, group: string, state: FolderState): void {
+  localStorage.setItem(folderKey(assistantId, group), JSON.stringify(state))
+}
+
+export function addFolder(assistantId: string, group: string, name: string): void {
+  const s = getFolders(assistantId, group)
+  const clean = name.trim()
+  if (!clean || s.names.includes(clean)) return
+  setFolders(assistantId, group, { ...s, names: [...s.names, clean] })
+}
+
+export function removeFolder(assistantId: string, group: string, name: string): void {
+  const s = getFolders(assistantId, group)
+  const of = { ...s.of }
+  // the resources come back out to the top level; nothing on disk moves
+  for (const [p, f] of Object.entries(of)) if (f === name) delete of[p]
+  setFolders(assistantId, group, { names: s.names.filter((n) => n !== name), of })
+}
+
+// folder = null takes the resource out of every folder
+export function assignFolder(
+  assistantId: string,
+  group: string,
+  path: string,
+  folder: string | null
+): void {
+  const s = getFolders(assistantId, group)
+  const of = { ...s.of }
+  if (folder) of[path] = folder
+  else delete of[path]
+  setFolders(assistantId, group, { ...s, of })
+}
+
 // Paths come from the main process, so they carry the platform's own separator.
 function isUnder(dir: string, p: string): boolean {
   return p.startsWith(dir + '/') || p.startsWith(dir + '\\')
@@ -197,6 +272,15 @@ export function forgetResource(assistantId: string, path: string): void {
   const favs = getFavorites()
   if (favs.delete(path)) localStorage.setItem(FAV_KEY, JSON.stringify([...favs]))
   for (const group of GROUP_KEYS) {
+    const folders = getFolders(assistantId, group)
+    const of = { ...folders.of }
+    let touched = false
+    for (const p of Object.keys(of))
+      if (p === path || isUnder(path, p)) {
+        delete of[p]
+        touched = true
+      }
+    if (touched) setFolders(assistantId, group, { ...folders, of })
     const list = getOrder(assistantId, group)
     // a deleted skill takes its whole folder, so drop anything under it too
     const kept = list.filter((p) => p !== path && !isUnder(path, p))
@@ -207,15 +291,20 @@ export function forgetResource(assistantId: string, path: string): void {
 // Same, for a whole assistant: its ordering, recent dirs and any favorite that
 // lived inside its folder.
 export function forgetAssistant(assistantId: string, baseDir: string): void {
-  for (const group of GROUP_KEYS) localStorage.removeItem(orderKey(assistantId, group))
+  for (const group of GROUP_KEYS) {
+    localStorage.removeItem(orderKey(assistantId, group))
+    localStorage.removeItem(folderKey(assistantId, group))
+  }
   localStorage.removeItem(`recentdirs:${assistantId}`)
   const favs = getFavorites()
   const kept = [...favs].filter((p) => !isUnder(baseDir, p))
   if (kept.length !== favs.size) localStorage.setItem(FAV_KEY, JSON.stringify(kept))
 }
 
-// Sort items by the saved order; unknown (new) items keep their natural order at the end.
-export function applyOrder<T extends { path: string | null }>(
+// Sort items by the saved order; unknown (new) items keep their natural order at
+// the end. A file that belongs to a resource is ranked with that resource, or a
+// saved order would sink every one of them to the bottom of the group.
+export function applyOrder<T extends { path: string | null; meta?: Record<string, unknown> }>(
   items: T[],
   assistantId: string,
   group: string
@@ -223,9 +312,9 @@ export function applyOrder<T extends { path: string | null }>(
   const order = getOrder(assistantId, group)
   if (order.length === 0) return items
   const rank = new Map(order.map((p, i) => [p, i]))
-  return [...items].sort((a, b) => {
-    const ra = rank.has(a.path || '') ? rank.get(a.path || '')! : Infinity
-    const rb = rank.has(b.path || '') ? rank.get(b.path || '')! : Infinity
-    return ra - rb
-  })
+  const rankOf = (i: T): number => {
+    const own = (i.meta?.under as string) || i.path || ''
+    return rank.has(own) ? rank.get(own)! : Infinity
+  }
+  return [...items].sort((a, b) => rankOf(a) - rankOf(b))
 }

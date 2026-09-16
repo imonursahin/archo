@@ -139,7 +139,7 @@ export default function Editor({ item, onDirtyChange, onClose }: Props): JSX.Ele
       setRawText('')
       return
     }
-    const isJson = item.path.endsWith('.json')
+    const isPlain = !/\.(md|mdc)$/i.test(item.path)
     window.api.readResource(item.path).then((text) => {
       const p = parse(text)
       setFm(p.fm)
@@ -147,7 +147,7 @@ export default function Editor({ item, onDirtyChange, onClose }: Props): JSX.Ele
       setBody(p.body)
       setRawText(text)
       setOriginal(text)
-      setMode(isJson ? 'raw' : 'edit') // json (settings/plugins): raw only
+      setMode(isPlain ? 'raw' : 'edit') // json, scripts, anything not markdown
     })
   }, [item?.path])
 
@@ -218,9 +218,10 @@ export default function Editor({ item, onDirtyChange, onClose }: Props): JSX.Ele
   )
 
   const previewHtml = useMemo(() => {
+    if (mode !== 'preview') return ''
     const parsed = parse(current)
     return renderMarkdown(parsed.body)
-  }, [current])
+  }, [current, mode])
 
   if (!item) {
     return (
@@ -234,7 +235,7 @@ export default function Editor({ item, onDirtyChange, onClose }: Props): JSX.Ele
   const hasFm = order.length > 0
   const issues = lint(item.kind, item.path || item.name, fm, hasFm)
   const extraKeys = order.filter((k) => !['name', 'description'].includes(k))
-  const isJson = !!item.path && item.path.endsWith('.json')
+  const isJson = !!item.path && !/\.(md|mdc)$/i.test(item.path)
   const suggestions = (FIELD_SUGGEST[item.kind] || []).filter((k) => !order.includes(k))
 
   // pick a control based on the field key / value shape

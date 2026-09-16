@@ -32,10 +32,45 @@ export interface ResourceItem {
     | 'settings'
     | 'hook'
     | 'memory'
+    | 'file'
   name: string
   path: string | null
   description?: string
   meta?: Record<string, unknown>
+}
+
+// Everything under a resource's own folder — a skill's references/ and scripts/,
+// a hook's shell scripts. They are part of the assistant and were only ever
+// reachable in Finder. Text only: the editor reads and writes utf8, so offering
+// to open a PNG would corrupt it on the first save.
+const SIDE_FILE_RE = /\.(md|mdc|txt|json|ya?ml|toml|py|sh|bash|zsh|js|mjs|cjs|ts|tsx|rb|pl|lua|sql|css|html?|xml|ini|cfg|conf)$/i
+const SIDE_FILE_SKIP = /^(node_modules|\.git|\.venv|__pycache__|\.DS_Store)$/
+
+async function collectSideFiles(
+  dir: string,
+  skip: Set<string>,
+  rel = '',
+  depth = 0
+): Promise<ResourceItem[]> {
+  if (depth > 4) return []
+  const out: ResourceItem[] = []
+  for (const entry of (await safeReadDir(dir)).sort()) {
+    if (SIDE_FILE_SKIP.test(entry)) continue
+    const file = path.join(dir, entry)
+    const label = rel ? `${rel}/${entry}` : entry
+    if (skip.has(file)) continue
+    let stat: import('fs').Stats
+    try {
+      // lstat, not stat: a symlink back up the tree would recurse forever
+      stat = await fs.lstat(file)
+    } catch {
+      continue
+    }
+    if (stat.isSymbolicLink()) continue
+    if (stat.isDirectory()) out.push(...(await collectSideFiles(file, skip, label, depth + 1)))
+    else if (SIDE_FILE_RE.test(entry)) out.push({ kind: 'file', name: label, path: file })
+  }
+  return out
 }
 
 let storePath = ''
@@ -435,26 +470,38 @@ export async function getRunInfo(id: string): Promise<{ cwd: string; command: st
 async function collectSkills(baseDir: string, e: EngineDef): Promise<ResourceItem[]> {
   if (!e.skillsDir) return []
   const root = path.join(baseDir, e.skillsDir)
-  const items: ResourceItem[] = []
+  // a skill's own files ride with it so sorting cannot scatter them under the
+  // neighbouring skills
+  const withFiles: { item: ResourceItem; files: ResourceItem[] }[] = []
   for (const entry of await safeReadDir(root)) {
     if (e.skillStyle === 'dir-skillmd') {
       const skillMd = path.join(root, entry, 'SKILL.md')
       if (existsSync(skillMd)) {
         const { data } = parseFrontmatter(await fs.readFile(skillMd, 'utf8').catch(() => ''))
-        items.push({ kind: 'skill', name: data.name || entry, path: skillMd, description: data.description })
+        withFiles.push({
+          item: { kind: 'skill', name: data.name || entry, path: skillMd, description: data.description },
+          files: (await collectSideFiles(path.join(root, entry), new Set([skillMd]))).map((f) => ({
+            ...f,
+            meta: { under: skillMd }
+          }))
+        })
       }
     } else if (/\.(md|mdc)$/.test(entry)) {
       const file = path.join(root, entry)
       const { data } = parseFrontmatter(await fs.readFile(file, 'utf8').catch(() => ''))
-      items.push({
-        kind: 'skill',
-        name: data.name || entry.replace(/\.(md|mdc)$/, ''),
-        path: file,
-        description: data.description
+      withFiles.push({
+        item: {
+          kind: 'skill',
+          name: data.name || entry.replace(/\.(md|mdc)$/, ''),
+          path: file,
+          description: data.description
+        },
+        files: []
       })
     }
   }
-  return items.sort((a, b) => a.name.localeCompare(b.name))
+  withFiles.sort((a, b) => a.item.name.localeCompare(b.item.name))
+  return withFiles.flatMap(({ item, files }) => [item, ...files])
 }
 
 async function collectFlat(
@@ -711,6 +758,9 @@ async function collectHooks(baseDir: string, e: EngineDef): Promise<ResourceItem
       })
     }
   }
+  // the scripts the events call: they live in .claude/hooks/, next to nothing
+  // that listed them before
+  items.push(...(await collectSideFiles(path.join(dir, 'hooks'), new Set())))
   return items
 }
 

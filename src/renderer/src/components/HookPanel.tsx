@@ -39,8 +39,8 @@ function asMatchers(meta: unknown): Matcher[] {
 
 export default function HookPanel({ item, onClose, onChanged }: Props): JSX.Element {
   const [matchers, setMatchers] = useState<Matcher[]>(asMatchers(item.meta))
-  const [raw, setRaw] = useState(false)
-  const [draft, setDraft] = useState('')
+  const [raw, setRaw] = useState(true)
+  const [draft, setDraft] = useState(() => JSON.stringify(asMatchers(item.meta), null, 2))
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 

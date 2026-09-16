@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2
+
+**Added**
+- **The files inside a resource are visible now.** A hook's scripts (`.claude/hooks/*`) appear under Hooks, and whatever a skill keeps beside its `SKILL.md` — `references/`, `scripts/` — appears under that skill. Click one to read it, edit it and save it; anything that is not Markdown opens as plain text instead of being shown as frontmatter fields and a Markdown preview.
+- **Folders for skills, agents and commands.** Create a folder in the sidebar and drag resources into it; drop one above the "not in a folder" line to take it out. Nothing moves on disk — Claude Code finds an agent only as a flat `.claude/agents/*.md` and a skill only at `.claude/skills/<name>/SKILL.md`, so a real subfolder would silently disable them. The grouping is Archo's own and travels with an export.
+
+**Changed**
+- A hook event opens as the raw JSON it is; the matcher form is still one click away under Edit.
+
+**Fixed**
+- The hook form's fields were unstyled — white boxes on a dark window.
+
 ## 0.2.1
 
 **Added**
