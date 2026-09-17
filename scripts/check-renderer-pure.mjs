@@ -613,6 +613,45 @@ const child = (name, parent) => ({
   )
 }
 
+// a collapsed folder keeps its header, shows ▸ and hides its members
+{
+  const h = (type, props, ...children) => ({ type, props: props || {}, children })
+  const fn = mkGrouped(
+    h, false, FOLDERABLE, () => ({ names: ['work'], of: { '/s/a/SKILL.md': 'work' } }), 'a',
+    { 'skills:work': true }, (item) => ({ item: item.name }), () => {}, () => {}, () => {}, null,
+    () => {}, () => {}, (k) => k
+  )
+  const out = fn({ key: 'skills', label: 'Skills', tag: 'md' }, [res('a'), child('a.py', 'a'), res('b')])
+  const header = out[0]
+  assert.strictEqual(header.props.key, 'folder:work')
+  const chevron = header.children.find((c) => c && c.props && c.props.className === 'chevron')
+  assert.deepStrictEqual(chevron.children, ['▸'], 'a collapsed folder must draw ▸')
+  assert.deepStrictEqual(
+    out.filter((el) => 'item' in el).map((el) => el.item),
+    ['b'],
+    'a collapsed folder must hide its members and their files'
+  )
+}
+
+// the new-folder input: Enter creates the folder, Escape closes the input
+{
+  const calls = []
+  const h = (type, props) => ({ type, props: props || {} })
+  const fn = mkGrouped(
+    h, false, FOLDERABLE, () => ({ names: [], of: {} }), 'a', {}, (item) => ({ item: item.name }),
+    () => {}, () => {}, () => {}, 'skills',
+    (g, name) => calls.push(['new', g, name]), (v) => calls.push(['naming', v]), (k) => k
+  )
+  const input = fn({ key: 'skills', label: 'Skills', tag: 'md' }, []).find(
+    (el) => el.props && el.props.key === 'new-folder'
+  )
+  assert.strictEqual(input.type, 'input', 'namingFolder === group must draw the input')
+  input.props.onKeyDown({ key: 'Enter', currentTarget: { value: 'work' } })
+  input.props.onKeyDown({ key: 'Escape', currentTarget: { value: 'x' } })
+  input.props.onKeyDown({ key: 'a', currentTarget: { value: 'x' } })
+  assert.deepStrictEqual(calls, [['new', 'skills', 'work'], ['naming', null]])
+}
+
 // ------------------------------------------------------- renderItem canDrag
 // a side file can be neither reordered nor dropped into a folder
 {
@@ -626,6 +665,20 @@ const child = (name, parent) => ({
   assert.strictEqual(canDrag(ctx, { kind: 'skill' }), false)
 }
 
+// ------------------------------------------------------- editor isJson
+// every non-markdown file with a path is shown as raw text
+{
+  const line = editorSrc.match(
+    /const isJson = ([^\n]+)/
+  )
+  assert.ok(line, 'isJson not found in Editor — re-point this check')
+  const isJson = new Function('item', `return ${line[1]}`)
+  assert.strictEqual(isJson({ path: '/h/guard.py' }), true)
+  assert.strictEqual(isJson({ path: '/s/a/RULES.MDC' }), false)
+  assert.strictEqual(isJson({ path: '/s/a/SKILL.md' }), false)
+  assert.strictEqual(isJson({ path: null }), false)
+}
+
 // --------------------------------------------------- group header count
 // the count beside a group label counts resources, not their side files
 {
@@ -637,4 +690,4 @@ const child = (name, parent) => ({
   assert.strictEqual(count([res('a'), child('a.py', 'a'), child('b.sh', 'a'), res('b')]), 2)
 }
 
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, editor mode')
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, collapsed folder, folder input keys, isJson, editor mode')
