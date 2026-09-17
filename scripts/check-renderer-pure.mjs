@@ -379,6 +379,11 @@ same.fn('skills', 'work')
 assert.deepStrictEqual(same.log.assigned, [['a', 'skills', '/a/s/SKILL.md', 'work']])
 assert.strictEqual(same.log.dragCleared, 1, 'a same-group drop must clear the drag')
 assert.strictEqual(same.log.ticks, 1, 'a same-group drop must bump the order tick once')
+const none = dropper(null)
+none.fn('skills', 'work')
+assert.deepStrictEqual(none.log.assigned, [], 'a drop with no drag in progress must not assign')
+assert.strictEqual(none.log.dragCleared, 1)
+assert.strictEqual(none.log.ticks, 0)
 
 // ------------------------------------------------- newFolder / dropFolder
 // a blank name closes the input without creating a folder, and a cancelled
@@ -403,6 +408,8 @@ assert.deepStrictEqual(nf.naming, [null], 'but the name input still closes')
 assert.strictEqual(nf.ticks, 0)
 newFolder('skills', 'work')
 assert.deepStrictEqual(nf.added, [['a', 'skills', 'work']])
+assert.deepStrictEqual(nf.naming, [null, null], 'a created folder closes the input')
+assert.strictEqual(nf.ticks, 1, 'a created folder bumps the order tick once')
 
 const mkDropFolder = new Function(
   'assistantId',
@@ -413,11 +420,11 @@ const mkDropFolder = new Function(
   `${transformSync(grabIndented(sidebarSrc, 'dropFolder'), { loader: 'ts' }).code}\nreturn dropFolder`
 )
 function folderRemover(answer) {
-  const log = { removed: [], ticks: 0 }
+  const log = { removed: [], ticks: 0, asked: [] }
   const fn = mkDropFolder(
     'a',
-    () => answer,
-    (k) => k,
+    (msg) => (log.asked.push(msg), answer),
+    (k, vars) => `${k}:${vars.name}`,
     (...args) => log.removed.push(args),
     () => log.ticks++
   )
@@ -430,6 +437,8 @@ assert.strictEqual(cancelled.log.ticks, 0)
 const confirmed = folderRemover(true)
 confirmed.fn('skills', 'work')
 assert.deepStrictEqual(confirmed.log.removed, [['a', 'skills', 'work']])
+assert.strictEqual(confirmed.log.ticks, 1, 'a removed folder bumps the order tick once')
+assert.deepStrictEqual(confirmed.log.asked, ['confirmRemoveFolder:work'], 'the confirm names the folder')
 
 // ----------------------------------------------- HookPanel: raw draft seed
 // the panel opens in raw mode with the event's matchers already in the box, so
@@ -686,6 +695,12 @@ const child = (name, parent) => ({
     return e
   }
 
+  for (const k of ['folder:work', 'loose-drop']) {
+    const over = ev()
+    byKey(k).props.onDragOver(over)
+    assert.strictEqual(over.prevented, 1, `${k} must preventDefault on dragover or drop never fires`)
+  }
+
   const headerDrop = ev()
   byKey('folder:work').props.onDrop(headerDrop)
   assert.strictEqual(headerDrop.prevented, 1, 'a folder header drop must call preventDefault')
@@ -715,6 +730,33 @@ const child = (name, parent) => ({
 
   byKey('new-folder').props.onBlur({ target: { value: 'home' } })
   assert.deepStrictEqual(calls.splice(0), [['new', 'skills', 'home']], 'blur must create the folder')
+}
+
+// the new-folder button shows when the input is closed and opens it on click
+{
+  const naming = []
+  const fn = mkGrouped(
+    (type, props) => ({ type, props: props || {} }), false, FOLDERABLE, () => ({ names: [], of: {} }), 'a',
+    {}, (item) => ({ item: item.name }), () => {}, () => {}, () => {}, 'agents', () => {},
+    (v) => naming.push(v), (k) => k
+  )
+  const btn = fn({ key: 'skills', label: 'Skills', tag: 'md' }, []).find(
+    (el) => el.props && el.props.key === 'new-folder'
+  )
+  assert.strictEqual(btn.type, 'div', 'another group naming a folder must not open this input')
+  assert.strictEqual(btn.props.className, 'new-btn')
+  btn.props.onClick()
+  assert.deepStrictEqual(naming, ['skills'])
+}
+
+// ------------------------------------------------------- renderItem tag
+// a side file is tagged by its extension, everything else by its group
+{
+  const expr = sidebarSrc.match(/<span className="tag">\{([^\n]+)\}<\/span>/)
+  assert.ok(expr, 'the item tag was not found in renderItem — re-point this check')
+  const tagOf = new Function('item', 'tag', 'fileTag', `return ${expr[1]}`)
+  assert.strictEqual(tagOf({ kind: 'file', name: 'guard.py' }, 'md', fileTag), 'py')
+  assert.strictEqual(tagOf({ kind: 'skill', name: 'guard.py' }, 'md', fileTag), 'md')
 }
 
 // ------------------------------------------------------- renderItem canDrag
@@ -755,4 +797,4 @@ const child = (name, parent) => ({
   assert.strictEqual(count([res('a'), child('a.py', 'a'), child('b.sh', 'a'), res('b')]), 2)
 }
 
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, collapsed folder, folder input keys, isJson, editor mode')
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode')
