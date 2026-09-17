@@ -93,7 +93,7 @@ export default function HookPanel({ item, onClose, onChanged }: Props): JSX.Elem
       return
     }
     setErr('')
-    if (await persist(parsed as Matcher[])) setRaw(false)
+    await persist(parsed as Matcher[])
   }
 
   async function removeEvent(): Promise<void> {
@@ -123,6 +123,7 @@ export default function HookPanel({ item, onClose, onChanged }: Props): JSX.Elem
           <button
             className={raw ? 'active' : ''}
             onClick={() => {
+              if (raw) return
               setDraft(JSON.stringify(matchers, null, 2))
               setErr('')
               setRaw(true)
@@ -152,7 +153,13 @@ export default function HookPanel({ item, onClose, onChanged }: Props): JSX.Elem
               <button className="btn primary" onClick={saveRaw} disabled={busy}>
                 {t('save')}
               </button>
-              <button className="btn" onClick={() => setRaw(false)}>
+              <button
+                className="btn"
+                onClick={() => {
+                  setDraft(JSON.stringify(matchers, null, 2))
+                  setErr('')
+                }}
+              >
                 {t('discard')}
               </button>
             </div>

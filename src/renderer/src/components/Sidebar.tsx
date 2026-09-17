@@ -472,8 +472,11 @@ export default function Sidebar({
           if (searching && raw.length === 0) return null
           const items = searching ? raw : applyOrder(raw, assistantId, def.key)
           const isCollapsed = searching ? false : collapsed[def.key]
-          // drag-reorder only when not searching and the group has >1 item
-          const dragCtx = !searching && items.length > 1 ? { group: def.key, items } : undefined
+          // drag to reorder needs 2+ items, but a lone item can still go into a folder
+          const dragCtx =
+            !searching && (items.length > 1 || FOLDERABLE.has(def.key))
+              ? { group: def.key, items }
+              : undefined
           return (
             <div key={def.key}>
               <div

@@ -305,7 +305,7 @@ assert.strictEqual(good.log.writes.length, 1, 'a valid array must be written')
 assert.deepStrictEqual(good.log.writes[0][2], [{ matcher: 'Bash', hooks: [] }])
 assert.strictEqual(good.log.writes[0][0], 'settings.json', 'the file must travel to the write')
 assert.strictEqual(good.log.err, '', 'a successful save clears the error')
-assert.strictEqual(good.log.rawExited, true, 'a successful raw save leaves raw mode')
+assert.strictEqual(good.log.rawExited, false, 'a successful raw save stays in raw mode')
 assert.strictEqual(good.log.changed, 1)
 assert.deepStrictEqual(good.log.toasts, [['toastSaved', 'success']])
 assert.deepStrictEqual(good.log.matchers, [{ matcher: 'Bash', hooks: [] }])
@@ -759,6 +759,40 @@ const child = (name, parent) => ({
   assert.strictEqual(tagOf({ kind: 'skill', name: 'guard.py' }, 'md', fileTag), 'md')
 }
 
+// ------------------------------------------------------- group dragCtx
+// a lone skill/agent/command must still be draggable into a folder
+{
+  const expr = sidebarSrc.match(/const dragCtx =\s*([\s\S]*?)\n\s*return \(/)
+  assert.ok(expr, 'the group dragCtx was not found — re-point this check')
+  const ctxOf = new Function('searching', 'items', 'FOLDERABLE', 'def', `return ${expr[1]}`)
+  const one = [res('a')]
+  assert.ok(ctxOf(false, one, FOLDERABLE, { key: 'skills' }), 'a single skill must be draggable')
+  assert.strictEqual(ctxOf(false, one, FOLDERABLE, { key: 'hooks' }), undefined, 'a single hook has nowhere to go')
+  assert.ok(ctxOf(false, [res('a'), res('b')], FOLDERABLE, { key: 'hooks' }), 'two hooks can still be reordered')
+  assert.strictEqual(ctxOf(true, one, FOLDERABLE, { key: 'skills' }), undefined, 'no dragging while searching')
+}
+
+// ------------------------------------------------ HookPanel raw tab and discard
+// clicking the active Raw tab must not overwrite unsaved edits, and Discard
+// resets the box to the saved hooks without leaving raw mode
+{
+  const tab = hookSrc.match(/className=\{raw \? 'active' : ''\}\s*onClick=\{\(\) => \{([\s\S]*?)\}\}\s*>/)
+  assert.ok(tab, 'the Raw tab handler was not found — re-point this check')
+  const discard = hookSrc.match(/onClick=\{\(\) => \{([^}]*?)\}\}\s*>\s*\{t\('discard'\)\}/)
+  assert.ok(discard, 'the Discard handler was not found — re-point this check')
+  const run = (body, raw) => {
+    const log = []
+    new Function('raw', 'matchers', 'setDraft', 'setErr', 'setRaw', body)(
+      raw, [{ matcher: 'Bash' }], (v) => log.push(['draft', v]), (v) => log.push(['err', v]), (v) => log.push(['raw', v])
+    )
+    return log
+  }
+  assert.deepStrictEqual(run(tab[1], true), [], 'the active Raw tab must be a no-op')
+  assert.deepStrictEqual(run(tab[1], false).map((x) => x[0]), ['draft', 'err', 'raw'])
+  const d = run(discard[1], true)
+  assert.deepStrictEqual(d, [['draft', JSON.stringify([{ matcher: 'Bash' }], null, 2)], ['err', '']])
+}
+
 // ------------------------------------------------------- renderItem canDrag
 // a side file can be neither reordered nor dropped into a folder
 {
@@ -808,4 +842,4 @@ const child = (name, parent) => ({
   assert.strictEqual(nested({ kind: 'skill' }, false), '', 'a top-level item is not nested')
 }
 
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode')
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode')

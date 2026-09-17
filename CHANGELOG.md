@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+**Fixed**
+- A group with a single skill, agent or command can now be dragged into a folder. Before, dragging only worked with two or more items, so a lone item could never be put into a folder.
+- The hook raw editor stays in raw mode after a save. Clicking the Raw tab again no longer throws away unsaved edits, and Discard resets the text to the saved hooks instead of switching to the form.
+
 ## 0.2.2
 
 **Added**
