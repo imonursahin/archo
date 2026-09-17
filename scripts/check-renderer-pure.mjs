@@ -499,4 +499,142 @@ assert.strictEqual(mkPreview('edit', '# x', () => ({ body: '# x' }), render), ''
 assert.strictEqual(rendered, 0, 'markdown must not be rendered outside preview')
 assert.strictEqual(mkPreview('preview', '# x', () => ({ body: '# x' }), render), '<p>x</p>')
 
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, editor mode')
+// ---------------------------------------------------------- renderGrouped
+// the folder layout of a group: a closure over Sidebar state with JSX, so it is
+// lifted with a stub JSX factory and every binding injected. renderItem is
+// stubbed to record which item landed where and whether it was drawn in a folder.
+const mkGrouped = new Function(
+  'h',
+  'searching',
+  'FOLDERABLE',
+  'getFolders',
+  'assistantId',
+  'collapsedFolders',
+  'renderItem',
+  'dropInFolder',
+  'dropFolder',
+  'setCollapsedFolders',
+  'namingFolder',
+  'newFolder',
+  'setNamingFolder',
+  't',
+  `${transformSync(grabIndented(sidebarSrc, 'renderGrouped'), {
+    loader: 'tsx',
+    jsx: 'transform',
+    jsxFactory: 'h'
+  }).code}\nreturn renderGrouped`
+)
+const FOLDERABLE_SRC = sidebarSrc.match(/const FOLDERABLE = (new Set\([^)]*\))/)
+assert.ok(FOLDERABLE_SRC, 'FOLDERABLE not found — re-point this check')
+const FOLDERABLE = new Function(`return ${FOLDERABLE_SRC[1]}`)()
+function grouped({ searching = false, folders = { names: [], of: {} }, shut = {} } = {}) {
+  const h = (type, props) => ({ type, props: props || {} })
+  const renderItem = (item, _tag, _ctx, inFolder = false) => ({ item: item.name, inFolder })
+  const fn = mkGrouped(
+    h, searching, FOLDERABLE, () => folders, 'a', shut, renderItem,
+    () => {}, () => {}, () => {}, null, () => {}, () => {}, (k) => k
+  )
+  // a flat trace: `folder:<name>`, `loose-drop`, or `<item>` / `<item>@folder`
+  return (def, items) =>
+    fn({ key: def, label: def, tag: 'md' }, items).flatMap((el) => {
+      if ('item' in el) return [el.inFolder ? `${el.item}@folder` : el.item]
+      const k = el.props.key
+      if (k === 'new-folder') return []
+      return [k]
+    })
+}
+const res = (name, extra = {}) => ({ name, kind: 'skill', path: `/s/${name}/SKILL.md`, ...extra })
+const child = (name, parent) => ({
+  name,
+  kind: 'file',
+  path: `/s/${parent}/${name}`,
+  meta: { under: `/s/${parent}/SKILL.md` }
+})
+
+// items go to their own folder
+{
+  const draw = grouped({
+    folders: { names: ['work', 'home'], of: { '/s/a/SKILL.md': 'work', '/s/b/SKILL.md': 'home' } }
+  })
+  assert.deepStrictEqual(
+    draw('skills', [res('a'), res('b')]),
+    ['folder:work', 'a@folder', 'folder:home', 'b@folder', 'loose-drop'],
+    'each item must be drawn under the folder it is assigned to'
+  )
+}
+
+// no folder, or a folder that no longer exists, lands in the loose list
+{
+  const draw = grouped({ folders: { names: ['work'], of: { '/s/b/SKILL.md': 'gone' } } })
+  assert.deepStrictEqual(
+    draw('skills', [res('a'), res('b'), { name: 'c', kind: 'skill' }]),
+    ['folder:work', 'loose-drop', 'a', 'b', 'c'],
+    'unassigned, unknown-folder and path-less items belong to the loose list'
+  )
+}
+
+// a side file follows its parent, inside a folder and in the loose list
+{
+  const draw = grouped({ folders: { names: ['work'], of: { '/s/a/SKILL.md': 'work' } } })
+  assert.deepStrictEqual(
+    draw('skills', [child('a.py', 'a'), res('a'), child('b.py', 'b'), res('b')]),
+    ['folder:work', 'a@folder', 'a.py@folder', 'loose-drop', 'b', 'b.py'],
+    'a file must be drawn right after the item named by meta.under'
+  )
+  // a file is never a folder member on its own, so the folder count leaves it out
+  const h = (type, props, ...children) => ({ type, props: props || {}, children })
+  const fn = mkGrouped(
+    h, false, FOLDERABLE, () => ({ names: ['work'], of: { '/s/a/SKILL.md': 'work' } }), 'a', {},
+    (item) => ({ item: item.name }), () => {}, () => {}, () => {}, null, () => {}, () => {}, (k) => k
+  )
+  const header = fn({ key: 'skills', label: 'Skills', tag: 'md' }, [res('a'), child('a.py', 'a')])[0]
+  const count = header.children.find((c) => c && c.props && c.props.className === 'count')
+  assert.deepStrictEqual(count.children, [1], 'the folder count must not include side files')
+}
+
+// searching draws a flat list with no folders
+{
+  const draw = grouped({ searching: true, folders: { names: ['work'], of: { '/s/a/SKILL.md': 'work' } } })
+  assert.deepStrictEqual(
+    draw('skills', [res('a'), child('a.py', 'a'), res('b')]),
+    ['a', 'a.py', 'b'],
+    'a search result must skip folders and keep the given order'
+  )
+}
+
+// a group outside FOLDERABLE never shows folders
+{
+  assert.ok(!FOLDERABLE.has('hooks'))
+  const draw = grouped({ folders: { names: ['work'], of: { '/h/x': 'work' } } })
+  assert.deepStrictEqual(
+    draw('hooks', [{ name: 'x', kind: 'hook', path: '/h/x' }, { name: 'y', kind: 'hook', path: '/h/y' }]),
+    ['x', 'y'],
+    'hooks must render flat even when folder state exists'
+  )
+}
+
+// ------------------------------------------------------- renderItem canDrag
+// a side file can be neither reordered nor dropped into a folder
+{
+  const line = sidebarSrc.match(/const canDrag = ([^\n]+)/)
+  assert.ok(line, 'canDrag not found in renderItem — re-point this check')
+  const canDrag = new Function('dragCtx', 'item', `return ${line[1]}`)
+  const ctx = { group: 'skills', items: [] }
+  assert.strictEqual(canDrag(ctx, { kind: 'skill', path: '/s/a/SKILL.md' }), true)
+  assert.strictEqual(canDrag(ctx, { kind: 'file', path: '/s/a/a.py' }), false, 'a file must not be draggable')
+  assert.strictEqual(canDrag(undefined, { kind: 'skill', path: '/s/a/SKILL.md' }), false)
+  assert.strictEqual(canDrag(ctx, { kind: 'skill' }), false)
+}
+
+// --------------------------------------------------- group header count
+// the count beside a group label counts resources, not their side files
+{
+  const expr = sidebarSrc.match(
+    /className="group-header"[\s\S]*?<span className="count">\{([^\n]+)\}<\/span>/
+  )
+  assert.ok(expr, 'the group header count was not found — re-point this check')
+  const count = new Function('items', `return ${expr[1]}`)
+  assert.strictEqual(count([res('a'), child('a.py', 'a'), child('b.sh', 'a'), res('b')]), 2)
+}
+
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, editor mode')
