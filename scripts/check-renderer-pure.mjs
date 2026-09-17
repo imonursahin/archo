@@ -378,6 +378,66 @@ const same = dropper({ path: '/a/s/SKILL.md', group: 'skills' })
 same.fn('skills', 'work')
 assert.deepStrictEqual(same.log.assigned, [['a', 'skills', '/a/s/SKILL.md', 'work']])
 
+// ------------------------------------------------- newFolder / dropFolder
+// a blank name closes the input without creating a folder, and a cancelled
+// confirm leaves the folder where it is
+const mkNewFolder = new Function(
+  'assistantId',
+  'addFolder',
+  'setNamingFolder',
+  'setOrderTick',
+  `${transformSync(grabIndented(sidebarSrc, 'newFolder'), { loader: 'ts' }).code}\nreturn newFolder`
+)
+const nf = { added: [], naming: [], ticks: 0 }
+const newFolder = mkNewFolder(
+  'a',
+  (...args) => nf.added.push(args),
+  (v) => nf.naming.push(v),
+  () => nf.ticks++
+)
+newFolder('skills', '   ')
+assert.deepStrictEqual(nf.added, [], 'a blank name must not create a folder')
+assert.deepStrictEqual(nf.naming, [null], 'but the name input still closes')
+assert.strictEqual(nf.ticks, 0)
+newFolder('skills', 'work')
+assert.deepStrictEqual(nf.added, [['a', 'skills', 'work']])
+
+const mkDropFolder = new Function(
+  'assistantId',
+  'confirm',
+  'ti',
+  'removeFolder',
+  'setOrderTick',
+  `${transformSync(grabIndented(sidebarSrc, 'dropFolder'), { loader: 'ts' }).code}\nreturn dropFolder`
+)
+function folderRemover(answer) {
+  const log = { removed: [], ticks: 0 }
+  const fn = mkDropFolder(
+    'a',
+    () => answer,
+    (k) => k,
+    (...args) => log.removed.push(args),
+    () => log.ticks++
+  )
+  return { fn, log }
+}
+const cancelled = folderRemover(false)
+cancelled.fn('skills', 'work')
+assert.deepStrictEqual(cancelled.log.removed, [], 'a cancelled confirm must not remove the folder')
+assert.strictEqual(cancelled.log.ticks, 0)
+const confirmed = folderRemover(true)
+confirmed.fn('skills', 'work')
+assert.deepStrictEqual(confirmed.log.removed, [['a', 'skills', 'work']])
+
+// ----------------------------------------------- HookPanel: raw draft seed
+// the panel opens in raw mode with the event's matchers already in the box, so
+// saving without an edit must write back exactly what was loaded
+const { asMatchers } = load(grab(hookSrc, 'asMatchers'), ['asMatchers'])
+const matchers = [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo hi', timeout: 5 }] }]
+assert.deepStrictEqual(JSON.parse(JSON.stringify(asMatchers(matchers), null, 2)), matchers)
+assert.deepStrictEqual(asMatchers({ not: 'a list' }), [], 'a malformed event opens as an empty list')
+assert.deepStrictEqual(asMatchers(undefined), [])
+
 // ------------------------------------------------------- Editor: isPlain
 // the load effect decides the opening mode; lifted whole with its setters stubbed
 const effStart = editorSrc.indexOf('useEffect(() => {\n    if (!item?.path)')

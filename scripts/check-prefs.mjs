@@ -206,6 +206,27 @@ const ordered = applyOrder(
 ).map((i) => i.path)
 assert.deepStrictEqual(ordered, ['/b/SKILL.md', '/a/SKILL.md', '/a/refs/one.md'])
 
+// a stored record missing a field reads as empty instead of crashing the sidebar
+setup({ 'folders:a:skills': { names: ['work'] } })
+assert.deepStrictEqual(getFolders('a', 'skills'), { names: ['work'], of: {} })
+setup({ 'folders:a:skills': 'not json at all' })
+assert.deepStrictEqual(getFolders('a', 'skills'), { names: [], of: {} })
+
+// a member outside the assistant folder cannot be made relative, so it stays
+// home; a group with no folders is not written into the bundle at all
+setup({})
+addFolder('a', 'skills', 'work')
+assignFolder('a', 'skills', '/old/base/.claude/skills/in/SKILL.md', 'work')
+assignFolder('a', 'skills', '/somewhere/else/SKILL.md', 'work')
+const edges = exportAppState('/old/base', 'a')
+assert.deepStrictEqual(edges.folders.skills.of, { '.claude/skills/in/SKILL.md': 'work' })
+assert.ok(!('agents' in edges.folders), 'a group without folders is omitted')
+
+// an older or hand-edited bundle with a bare folders entry imports as empty
+setup({})
+importAppState('/new/base', 'b', { prompts: [], favorites: [], order: {}, folders: { skills: {} } })
+assert.deepStrictEqual(getFolders('b', 'skills'), { names: [], of: {} })
+
 // the grouping travels with the assistant: paths go out relative to the folder
 // and come back absolute, so the same layout appears on another machine
 setup({})

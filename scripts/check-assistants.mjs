@@ -352,6 +352,31 @@ assert.deepStrictEqual(
 )
 assert.ok(res.hooks.some((i) => i.kind === 'hook' && i.name === 'Stop'), 'the events are still listed')
 
+// a flat-md engine keeps each skill as one file: sorted by name, nothing nested
+const flatDir = path.join(tmp, 'flat')
+const rules = path.join(flatDir, '.cursor', 'rules')
+await fs.mkdir(path.join(rules, 'stray-dir'), { recursive: true })
+await fs.writeFile(path.join(rules, 'zeta.md'), '---\nname: zeta\n---\n')
+await fs.writeFile(path.join(rules, 'alpha.mdc'), '---\nname: alpha\n---\n')
+await fs.writeFile(path.join(rules, 'notes.txt'), 'not a rule')
+await fs.writeFile(path.join(rules, 'stray-dir', 'x.md'), 'x')
+await registerAssistant(flatDir, 'Flat', 'cursor')
+const flat = await getResources('flat')
+assert.deepStrictEqual(flat.skills.map((i) => i.name), ['alpha', 'zeta'], 'flat skills sort by name')
+assert.ok(flat.skills.every((i) => i.kind === 'skill'), 'a flat-md engine lists no side files')
+
+// an assistant with hook events but no hooks folder lists the events and no files
+const hooklessDir = path.join(tmp, 'hookless')
+await fs.mkdir(path.join(hooklessDir, '.claude'), { recursive: true })
+await fs.writeFile(path.join(hooklessDir, '.claude', 'settings.json'), JSON.stringify({ hooks: { Stop: [] } }))
+await registerAssistant(hooklessDir, 'Hookless')
+const hookless = await getResources('hookless')
+assert.deepStrictEqual(
+  hookless.hooks.map((i) => i.kind),
+  ['hook'],
+  'a missing .claude/hooks folder adds no file rows and does not throw'
+)
+
 await fs.rm(tmp, { recursive: true, force: true })
 await fs.rm(out, { force: true })
 console.log('ok — assistant registry, bundle filter and settings writers')
