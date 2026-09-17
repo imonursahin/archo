@@ -797,4 +797,15 @@ const child = (name, parent) => ({
   assert.strictEqual(count([res('a'), child('a.py', 'a'), child('b.sh', 'a'), res('b')]), 2)
 }
 
+// ---------------------------------------------------- renderItem nested class
+// a side file and an item inside a folder are indented; a top-level item is not
+{
+  const expr = sidebarSrc.match(/className=\{`item \$\{([^}]+) \? 'nested' : ''\}/)
+  assert.ok(expr, 'the nested class expression was not found in renderItem — re-point this check')
+  const nested = new Function('item', 'inFolder', `return ${expr[1]} ? 'nested' : ''`)
+  assert.strictEqual(nested({ kind: 'file' }, false), 'nested', 'a side file is nested')
+  assert.strictEqual(nested({ kind: 'skill' }, true), 'nested', 'an item in a folder is nested')
+  assert.strictEqual(nested({ kind: 'skill' }, false), '', 'a top-level item is not nested')
+}
+
 console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode')
