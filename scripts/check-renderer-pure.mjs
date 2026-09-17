@@ -377,6 +377,8 @@ assert.strictEqual(cross.log.ticks, 0)
 const same = dropper({ path: '/a/s/SKILL.md', group: 'skills' })
 same.fn('skills', 'work')
 assert.deepStrictEqual(same.log.assigned, [['a', 'skills', '/a/s/SKILL.md', 'work']])
+assert.strictEqual(same.log.dragCleared, 1, 'a same-group drop must clear the drag')
+assert.strictEqual(same.log.ticks, 1, 'a same-group drop must bump the order tick once')
 
 // ------------------------------------------------- newFolder / dropFolder
 // a blank name closes the input without creating a folder, and a cancelled
@@ -437,6 +439,16 @@ const matchers = [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo h
 assert.deepStrictEqual(JSON.parse(JSON.stringify(asMatchers(matchers), null, 2)), matchers)
 assert.deepStrictEqual(asMatchers({ not: 'a list' }), [], 'a malformed event opens as an empty list')
 assert.deepStrictEqual(asMatchers(undefined), [])
+// pinned from source: the raw toggle starts on, and the draft is seeded from the event's matchers
+assert.match(hookSrc, /const \[raw, setRaw\] = useState\(true\)/, 'HookPanel must open in raw mode')
+{
+  const seed = hookSrc.match(/const \[draft, setDraft\] = useState\(\(\) => ([^\n]+)\)\n/)
+  assert.ok(seed, 'the draft seed was not found in HookPanel — re-point this check')
+  assert.strictEqual(seed[1], 'JSON.stringify(asMatchers(item.meta), null, 2)')
+  const draftOf = new Function('asMatchers', 'item', `return ${seed[1]}`)
+  assert.strictEqual(draftOf(asMatchers, { meta: matchers }), JSON.stringify(matchers, null, 2))
+  assert.strictEqual(draftOf(asMatchers, { meta: 'bad' }), '[]')
+}
 
 // ------------------------------------------------------- Editor: isPlain
 // the load effect decides the opening mode; lifted whole with its setters stubbed
@@ -650,6 +662,59 @@ const child = (name, parent) => ({
   input.props.onKeyDown({ key: 'Escape', currentTarget: { value: 'x' } })
   input.props.onKeyDown({ key: 'a', currentTarget: { value: 'x' } })
   assert.deepStrictEqual(calls, [['new', 'skills', 'work'], ['naming', null]])
+}
+
+// the folder handlers: header drop/click, the × button, loose drop, input blur
+{
+  const calls = []
+  const h = (type, props) => ({ type, props: props || {} })
+  let shut = { 'skills:work': false }
+  const fn = mkGrouped(
+    h, false, FOLDERABLE, () => ({ names: ['work'], of: {} }), 'a', shut, (item) => ({ item: item.name }),
+    (g, f) => calls.push(['drop', g, f]),
+    (g, f) => calls.push(['dropFolder', g, f]),
+    (upd) => (shut = upd(shut)),
+    'skills',
+    (g, name) => calls.push(['new', g, name]), () => {}, (k) => k
+  )
+  const out = fn({ key: 'skills', label: 'Skills', tag: 'md' }, [])
+  const byKey = (k) => out.find((el) => el.props && el.props.key === k)
+  const ev = () => {
+    const e = { prevented: 0, stopped: 0 }
+    e.preventDefault = () => e.prevented++
+    e.stopPropagation = () => e.stopped++
+    return e
+  }
+
+  const headerDrop = ev()
+  byKey('folder:work').props.onDrop(headerDrop)
+  assert.strictEqual(headerDrop.prevented, 1, 'a folder header drop must call preventDefault')
+  assert.deepStrictEqual(calls.splice(0), [['drop', 'skills', 'work']])
+
+  const looseDrop = ev()
+  byKey('loose-drop').props.onDrop(looseDrop)
+  assert.strictEqual(looseDrop.prevented, 1)
+  assert.deepStrictEqual(calls.splice(0), [['drop', 'skills', null]], 'loose-drop must take the item out of its folder')
+
+  byKey('folder:work').props.onClick()
+  assert.strictEqual(shut['skills:work'], true, 'a header click must toggle the folder collapsed')
+
+  // the × is a child span of the header, found through the header's JSX children
+  const hc = (type, props, ...children) => ({ type, props: props || {}, children })
+  const fnc = mkGrouped(
+    hc, false, FOLDERABLE, () => ({ names: ['work'], of: {} }), 'a', {}, (item) => ({ item: item.name }),
+    () => {}, (g, f) => calls.push(['dropFolder', g, f]), () => {}, null, () => {}, () => {}, (k) => k
+  )
+  const x = fnc({ key: 'skills', label: 'Skills', tag: 'md' }, [])[0].children.find(
+    (c) => c && c.props && c.props.className === 'folder-x'
+  )
+  const xClick = ev()
+  x.props.onClick(xClick)
+  assert.strictEqual(xClick.stopped, 1, 'the × must stop propagation so the header does not collapse')
+  assert.deepStrictEqual(calls.splice(0), [['dropFolder', 'skills', 'work']])
+
+  byKey('new-folder').props.onBlur({ target: { value: 'home' } })
+  assert.deepStrictEqual(calls.splice(0), [['new', 'skills', 'home']], 'blur must create the folder')
 }
 
 // ------------------------------------------------------- renderItem canDrag
