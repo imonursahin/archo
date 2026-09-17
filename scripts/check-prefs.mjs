@@ -227,5 +227,25 @@ assert.strictEqual(
   'and lands under the new folder on the way in'
 )
 
+// forgetAssistant drops the folder records too, and only its own
+setup({
+  'folders:a:skills': { names: ['work'], of: { '/base/s/SKILL.md': 'work' } },
+  'folders:a:agents': { names: ['x'], of: {} },
+  'folders:b:skills': { names: ['keep'], of: {} }
+})
+forgetAssistant('a', '/base')
+for (const g of ['skills', 'agents', 'commands', 'mcp', 'plugins', 'instructions', 'hooks', 'settings'])
+  assert.strictEqual(store.has(`folders:a:${g}`), false, `folders:a:${g} survived`)
+assert.ok(store.has('folders:b:skills'), "another assistant's folders must survive")
+
+// a corrupt record reads as no folders, never throws
+setup({})
+store.set('folders:a:skills', '{ not json')
+assert.deepStrictEqual(getFolders('a', 'skills'), { names: [], of: {} }, 'corrupt JSON must fall back to empty')
+
+// a names field that is not an array is ignored
+setup({ 'folders:a:skills': { names: 'work', of: { '/a/x.md': 'work' } } })
+assert.deepStrictEqual(getFolders('a', 'skills').names, [], 'a non-array names must fall back to []')
+
 await fs.rm(tmp, { recursive: true, force: true })
 console.log('ok — stored preference cleanup, sidebar folders and their export')

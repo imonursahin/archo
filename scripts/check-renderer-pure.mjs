@@ -334,4 +334,109 @@ const failedRaw = panel('[]', () => {
 await failedRaw.saveRaw()
 assert.strictEqual(failedRaw.log.rawExited, false, 'a failed save must not discard the raw draft')
 
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards')
+// ---------------------------------------------------------------- fileTag
+const sidebarSrc = await read('src/renderer/src/components/Sidebar.tsx')
+const { fileTag } = load(grab(sidebarSrc, 'fileTag'), ['fileTag'])
+assert.strictEqual(fileTag('scripts/run.py'), 'py')
+assert.strictEqual(fileTag('data.markdown'), 'mark', 'the extension label is cut to 4 chars')
+assert.strictEqual(fileTag('Makefile'), '·', 'a name without an extension gets a dot')
+
+// ----------------------------------------------------------- dropInFolder
+// a closure over Sidebar state, lifted with its bindings injected like the hook panel
+function grabIndented(text, name) {
+  const start = text.search(new RegExp(`(async )?function ${name}\\(`))
+  assert.notStrictEqual(start, -1, `${name} not found — re-point this check`)
+  const end = text.indexOf('\n  }\n', start)
+  assert.notStrictEqual(end, -1, `could not find the end of ${name}`)
+  return text.slice(start, end + 5)
+}
+const mkDrop = new Function(
+  'drag',
+  'assistantId',
+  'assignFolder',
+  'setDrag',
+  'setOrderTick',
+  `${transformSync(grabIndented(sidebarSrc, 'dropInFolder'), { loader: 'ts' }).code}\nreturn dropInFolder`
+)
+function dropper(drag) {
+  const log = { assigned: [], dragCleared: 0, ticks: 0 }
+  const fn = mkDrop(
+    drag,
+    'a',
+    (...args) => log.assigned.push(args),
+    (v) => v === null && log.dragCleared++,
+    () => log.ticks++
+  )
+  return { fn, log }
+}
+const cross = dropper({ path: '/a/agent.md', group: 'agents' })
+cross.fn('skills', 'work')
+assert.deepStrictEqual(cross.log.assigned, [], 'a drag from another group must not be assigned')
+assert.strictEqual(cross.log.dragCleared, 1, 'the ignored drag is still cleared')
+assert.strictEqual(cross.log.ticks, 0)
+const same = dropper({ path: '/a/s/SKILL.md', group: 'skills' })
+same.fn('skills', 'work')
+assert.deepStrictEqual(same.log.assigned, [['a', 'skills', '/a/s/SKILL.md', 'work']])
+
+// ------------------------------------------------------- Editor: isPlain
+// the load effect decides the opening mode; lifted whole with its setters stubbed
+const effStart = editorSrc.indexOf('useEffect(() => {\n    if (!item?.path)')
+assert.notStrictEqual(effStart, -1, 'the Editor load effect moved — re-point this check')
+const effEnd = editorSrc.indexOf('}, [item?.path])', effStart)
+const effBody = editorSrc.slice(effStart + 'useEffect('.length, effEnd + 1)
+const mkEffect = new Function(
+  'item',
+  'window',
+  'parse',
+  'setFm',
+  'setOrder',
+  'setBody',
+  'setRawText',
+  'setOriginal',
+  'setMode',
+  `return (${transformSync(effBody, { loader: 'ts' }).code.trim().replace(/;$/, '')})`
+)
+async function openMode(p) {
+  let mode = null
+  const noop = () => {}
+  const read = Promise.resolve('text')
+  mkEffect(
+    { path: p },
+    { api: { readResource: () => read } },
+    () => ({ fm: {}, order: [], body: '' }),
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    (m) => (mode = m)
+  )()
+  await read
+  await Promise.resolve()
+  return mode
+}
+assert.strictEqual(await openMode('/a/.claude/hooks/guard.py'), 'raw', 'a script opens raw')
+assert.strictEqual(await openMode('/a/settings.json'), 'raw')
+assert.strictEqual(await openMode('/a/SKILL.md'), 'edit', 'markdown opens in the form editor')
+assert.strictEqual(await openMode('/a/rule.MDC'), 'edit')
+
+// --------------------------------------------------- Editor: previewHtml
+const pvStart = editorSrc.indexOf('const previewHtml = useMemo(')
+assert.notStrictEqual(pvStart, -1, 'previewHtml moved — re-point this check')
+const pvEnd = editorSrc.indexOf('}, [current, mode])', pvStart)
+const pvFn = editorSrc.slice(pvStart + 'const previewHtml = useMemo('.length, pvEnd + 1)
+const mkPreview = new Function(
+  'mode',
+  'current',
+  'parse',
+  'renderMarkdown',
+  `return (${transformSync(pvFn, { loader: 'ts' }).code.trim().replace(/;$/, '')})()`
+)
+let rendered = 0
+const render = () => (rendered++, '<p>x</p>')
+assert.strictEqual(mkPreview('raw', '# x', () => ({ body: '# x' }), render), '', 'no render outside preview')
+assert.strictEqual(mkPreview('edit', '# x', () => ({ body: '# x' }), render), '')
+assert.strictEqual(rendered, 0, 'markdown must not be rendered outside preview')
+assert.strictEqual(mkPreview('preview', '# x', () => ({ body: '# x' }), render), '<p>x</p>')
+
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, editor mode')

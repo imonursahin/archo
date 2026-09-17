@@ -26,7 +26,8 @@ const {
   listAssistants,
   updateHookEvent,
   deleteHookEvent,
-  linkSkills
+  linkSkills,
+  getResources
 } = await import(pathToFileURL(out).href)
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'archo-reg-'))
@@ -304,6 +305,52 @@ if (process.platform !== 'win32') {
   // an assistant cannot bridge into its own directory
   assert.strictEqual((await linkSkills('linker', skillSrc)).ok, false)
 }
+
+// ============================================== side files (skills and hooks)
+// a skill's own files are listed right after it, text only, skipping vendored
+// dirs, symlinks and anything deeper than the depth cap
+const sideDir = path.join(tmp, 'side')
+const skillsRoot = path.join(sideDir, '.claude', 'skills')
+const zeta = path.join(skillsRoot, 'zeta')
+const alpha = path.join(skillsRoot, 'alpha')
+for (const d of [
+  path.join(zeta, 'references'),
+  path.join(zeta, 'node_modules', 'pkg'),
+  path.join(zeta, '.git'),
+  path.join(zeta, 'a', 'b', 'c', 'd', 'e'),
+  alpha,
+  path.join(sideDir, '.claude', 'hooks')
+])
+  await fs.mkdir(d, { recursive: true })
+await fs.writeFile(path.join(zeta, 'SKILL.md'), '---\nname: zeta\n---\n')
+await fs.writeFile(path.join(zeta, 'references', 'guide.md'), 'g')
+await fs.writeFile(path.join(zeta, 'run.py'), 'print(1)')
+await fs.writeFile(path.join(zeta, 'logo.png'), Buffer.from([0x89, 0x50]))
+await fs.writeFile(path.join(zeta, 'node_modules', 'pkg', 'index.js'), '')
+await fs.writeFile(path.join(zeta, '.git', 'config.txt'), '')
+await fs.writeFile(path.join(zeta, 'a', 'b', 'c', 'd', 'depth4.md'), '') // depth 4: kept
+await fs.writeFile(path.join(zeta, 'a', 'b', 'c', 'd', 'e', 'depth5.md'), '') // depth 5: cut
+await fs.writeFile(path.join(alpha, 'SKILL.md'), '---\nname: alpha\n---\n')
+await fs.writeFile(path.join(sideDir, '.claude', 'hooks', 'guard.sh'), '#!/bin/sh')
+await fs.writeFile(path.join(sideDir, '.claude', 'settings.json'), JSON.stringify({ hooks: { Stop: [] } }))
+if (process.platform !== 'win32') await fs.symlink(zeta, path.join(zeta, 'loop'))
+await registerAssistant(sideDir, 'Side')
+const res = await getResources('side')
+const zetaMd = path.join(zeta, 'SKILL.md')
+assert.deepStrictEqual(
+  res.skills.map((i) => i.name),
+  ['alpha', 'zeta', 'a/b/c/d/depth4.md', 'references/guide.md', 'run.py'],
+  'side files follow their own skill after the name sort, text only, no vendored dirs, no symlink, depth capped'
+)
+const sideFiles = res.skills.filter((i) => i.kind === 'file')
+assert.ok(sideFiles.every((f) => f.meta?.under === zetaMd), 'a side file must point at its SKILL.md')
+assert.ok(!sideFiles.some((f) => f.path === zetaMd), 'SKILL.md is the skill, not one of its files')
+assert.deepStrictEqual(
+  res.hooks.filter((i) => i.kind === 'file').map((i) => [i.name, i.path]),
+  [['guard.sh', path.join(sideDir, '.claude', 'hooks', 'guard.sh')]],
+  'hook scripts are listed as files'
+)
+assert.ok(res.hooks.some((i) => i.kind === 'hook' && i.name === 'Stop'), 'the events are still listed')
 
 await fs.rm(tmp, { recursive: true, force: true })
 await fs.rm(out, { force: true })
