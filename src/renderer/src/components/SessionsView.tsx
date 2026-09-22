@@ -651,6 +651,10 @@ export default function SessionsView({
   // which two terminals sit side by side is a choice once a session has more
   // than two, so the button opens a picker instead of guessing
   function toggleSplit(e: MouseEvent<HTMLButtonElement>): void {
+    if (splitPick) {
+      setSplitPick(null)
+      return
+    }
     setSplitRect(e.currentTarget.getBoundingClientRect())
     if (splitId) {
       setSplitId(null)

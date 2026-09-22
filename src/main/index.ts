@@ -586,10 +586,16 @@ function registerIpc(): void {
     return { ok: true as const, path: res.filePaths[0] }
   })
   handle('file:pick', async (defaultPath?: string) => {
+    // Windows and Linux cannot offer files and folders in one dialog — asking
+    // for both there gets a folder-only picker, so they get files ('dir:pick'
+    // is the folder one).
     const res = await dialog.showOpenDialog({
       title: 'Dosya seç',
       defaultPath,
-      properties: ['openFile', 'openDirectory', 'multiSelections']
+      properties:
+        process.platform === 'darwin'
+          ? ['openFile', 'openDirectory', 'multiSelections']
+          : ['openFile', 'multiSelections']
     })
     if (res.canceled) return { ok: false as const, paths: [] }
     return { ok: true as const, paths: res.filePaths }
@@ -608,32 +614,6 @@ function registerIpc(): void {
   handle('session:removeCheckpoint', (id: string, sha: string) =>
     removeSessionCheckpoint(id, sha)
   )
-  // ---- @file context picker: list files in a working dir ----
-  handle('fs:listFiles', async (dir: string) => {
-    if (!dir) return [] as { path: string; isDir: boolean }[]
-    const SKIP = /(^|\/)(node_modules|\.git|dist|build|\.next|out|\.turbo|coverage|\.venv|__pycache__)(\/|$)/
-    const out: { path: string; isDir: boolean }[] = []
-    const walk = async (d: string, rel: string): Promise<void> => {
-      if (out.length > 4000) return
-      let entries: fs.Dirent[] = []
-      try {
-        entries = await fs.promises.readdir(d, { withFileTypes: true })
-      } catch {
-        return
-      }
-      for (const e of entries) {
-        const rp = rel ? `${rel}/${e.name}` : e.name
-        if (SKIP.test(rp) || e.name.startsWith('.DS_Store')) continue
-        if (e.isDirectory()) {
-          out.push({ path: rp, isDir: true })
-          await walk(path.join(d, e.name), rp)
-        } else if (e.isFile()) out.push({ path: rp, isDir: false })
-      }
-    }
-    await walk(dir, '')
-    return out.sort((a, b) => a.path.localeCompare(b.path))
-  })
-  // ---- paste screenshot from clipboard → temp png path (for Claude vision) ----
   handle('clipboard:saveImage', async () => {
     const img = clipboard.readImage()
     if (img.isEmpty()) return { ok: false as const }

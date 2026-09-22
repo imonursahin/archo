@@ -4749,7 +4749,6 @@ textarea {
   padding: 1px 5px;
   border-radius: 4px;
 }
-.st-file,
 .st-cp,
 .st-prompt {
   display: flex;
@@ -4926,9 +4925,6 @@ textarea {
   background: var(--border);
   margin: 2px 4px;
 }
-.st-search:focus { border-color: var(--accent); }
-.st-file-row:hover { background: var(--bg-3); }
-.st-file-row.dir .st-file-path { color: var(--accent); font-weight: 500; }
 .st-fan-input {
   width: 100%;
   min-height: 70px;
@@ -5015,24 +5011,6 @@ textarea {
 .st-budget.warn svg {
   opacity: 1;
 }
-.st-model {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 11px;
-  padding: 4px 6px;
-  outline: none;
-}
-.st-model:focus {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-/* @file picker: multi-root */
-.st-file-top .st-search { margin-bottom: 0; flex: 1; }
-.st-root-x:hover { opacity: 1; color: var(--red); }
-
 /* recent dirs dropdown rows */
 .st-recent-row { display: flex; align-items: center; gap: 2px; }
 .st-recent-go {

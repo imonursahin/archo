@@ -326,7 +326,6 @@ export interface StudioApi {
   ): Promise<{ sha: string; message: string; time: number }>
   gitRestoreCheckpoint(dir: string, sha: string): Promise<void>
   removeCheckpoint(id: string, sha: string): Promise<void>
-  listFiles(dir: string): Promise<{ path: string; isDir: boolean }[]>
   getFilePath(file: File): string
   saveClipboardImage(): Promise<{ ok: boolean; path?: string }>
   hasClipboardImage(): Promise<boolean>

@@ -389,7 +389,6 @@ const DICT: Record<string, { en: string; tr: string }> = {
   },
   bridgeLinked: { en: 'Linked ({count})', tr: 'Bağlı ({count})' },
   bridgeLink: { en: 'Link assistant', tr: 'Asistanı bağla' },
-  loading: { en: 'loading…', tr: 'yükleniyor…' },
   savedPrompts: { en: 'Saved prompts — send to the active terminal', tr: 'Kaydedilmiş promptlar — aktif terminale gönder' },
   newPlus: { en: '＋ New', tr: '＋ Yeni' },
   titlePlaceholder: { en: 'Title', tr: 'Başlık' },

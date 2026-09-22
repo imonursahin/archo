@@ -80,7 +80,6 @@ const api = {
     ipcRenderer.invoke('git:restoreCheckpoint', dir, sha),
   removeCheckpoint: (id: string, sha: string) =>
     ipcRenderer.invoke('session:removeCheckpoint', id, sha),
-  listFiles: (dir: string) => ipcRenderer.invoke('fs:listFiles', dir),
   saveClipboardImage: () => ipcRenderer.invoke('clipboard:saveImage'),
   hasClipboardImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   notify: (title: string, body: string, meta?: object) =>

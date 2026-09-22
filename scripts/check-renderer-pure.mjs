@@ -851,7 +851,11 @@ const child = (name, parent) => ({
   assert.ok(line, 'the pickFiles injection was not found — re-point this check')
   const injected = new Function('r', `return ${line[1]}`)
   assert.strictEqual(injected({ paths: ['/a/b.md'] }), '@/a/b.md ')
-  assert.strictEqual(injected({ paths: ['/a/b.md', '/c/d e.txt'] }), '@/a/b.md @/c/d e.txt ')
+  assert.strictEqual(
+    injected({ paths: ['/a/b.md', '/c/d e.txt'] }),
+    '@/a/b.md @/c/d\\ e.txt ',
+    'a space inside a path must be escaped or it reads as two references'
+  )
 }
 
 // ----------------------------------------------------- prompt delete confirm
@@ -870,8 +874,7 @@ const child = (name, parent) => ({
       (k, v) => `${k}:${v.name}`,
       [{ id: '1', title: 'a' }, { id: '2', title: 'b' }],
       () => {},
-      (next) => (log.saved = next.map((x) => x.id)),
-      (k) => k
+      (next) => (log.saved = next.map((x) => x.id))
     )({ id: '1', title: 'a' })
     return log
   }
@@ -902,4 +905,20 @@ const child = (name, parent) => ({
   assert.deepStrictEqual(pick(['a', 'b'], 'b'), ['a'], 'picking a chosen one unpicks it')
   assert.deepStrictEqual(pick(['a', 'b'], 'c'), ['b', 'c'], 'a third pick drops the oldest')
 }
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode, file picker injection, prompt delete confirm, split pick')
+// -------------------------------------------------- file dialog properties
+// asking for files AND folders in one dialog is a macOS-only trick: Windows
+// and Linux answer it with a folder-only picker, which would make the Files
+// button unable to attach a file at all on those builds
+{
+  const mainSrc = await read('src/main/index.ts')
+  const expr = mainSrc.match(/properties:\n\s*(process\.platform[\s\S]*?)\n\s*\}\)/)
+  assert.ok(expr, 'the file-dialog properties were not found — re-point this check')
+  const propsFor = (platform) =>
+    new Function('process', `return ${expr[1]}`)({ platform })
+  assert.deepStrictEqual(propsFor('darwin'), ['openFile', 'openDirectory', 'multiSelections'])
+  for (const os of ['win32', 'linux']) {
+    assert.ok(!propsFor(os).includes('openDirectory'), `${os} must get a file picker`)
+    assert.ok(propsFor(os).includes('openFile'))
+  }
+}
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode, file picker injection, dialog properties, prompt delete confirm, split pick')

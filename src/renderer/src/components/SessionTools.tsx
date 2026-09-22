@@ -116,7 +116,7 @@ export default function SessionTools({
     if (!requireTerm()) return
     const r = await window.api.pickFiles(cwd)
     if (!r.ok || r.paths.length === 0) return
-    inject(r.paths.map((p) => `@${p}`).join(' ') + ' ')
+    inject(r.paths.map((p) => `@${p.replace(/ /g, '\\ ')}`).join(' ') + ' ')
   }
 
   function requireTerm(): boolean {
@@ -332,7 +332,7 @@ export default function SessionTools({
               </div>
               <div className="start-pop-foot">
                 <button className="btn" onClick={() => setStartRect(null)}>
-                  {t('cancel')}
+                  {t('close')}
                 </button>
                 <button className="btn primary" onClick={startClaude}>
                   {t('startClaude')}
