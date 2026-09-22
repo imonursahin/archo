@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.4
+
+**Added**
+- **Files opens the system file picker.** Pick any file or folder on the disk and its full path goes to the terminal. The old list only showed the working directory, so a file from elsewhere could not be attached. Paths with spaces are escaped.
+- **The split button asks which two terminals to show.** Before it just took the next one.
+- **Model and effort moved into the Claude button.** The two dropdowns left the toolbar; clicking Claude opens a small box with the choices and a Start button. Fable is on the list now.
+- **Integrations are tabs.** GitHub, Jira and Google Calendar no longer sit under each other; you see the one you pick.
+- Deleting a saved prompt asks first, unless you turned confirmations off.
+
+**Changed**
+- Doctor's re-check is an icon, and the checks show as skeleton rows while it runs.
+- "Delete conversation" moved to the left of the close-terminal box and is a plain text button.
+- The ticket field says "Jira Task Id".
+
 ## 0.2.3
 
 **Fixed**
