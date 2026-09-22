@@ -585,6 +585,15 @@ function registerIpc(): void {
     if (res.canceled || !res.filePaths[0]) return { ok: false as const }
     return { ok: true as const, path: res.filePaths[0] }
   })
+  handle('file:pick', async (defaultPath?: string) => {
+    const res = await dialog.showOpenDialog({
+      title: 'Dosya seç',
+      defaultPath,
+      properties: ['openFile', 'openDirectory', 'multiSelections']
+    })
+    if (res.canceled) return { ok: false as const, paths: [] }
+    return { ok: true as const, paths: res.filePaths }
+  })
   handle('session:setCwd', (id: string, cwd: string) => updateSessionMeta(id, { cwd }))
   handle('git:status', (dir: string) => gitStatus(dir))
   handle('git:revertFile', (dir: string, file: string, untracked: boolean) =>

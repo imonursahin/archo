@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import type { TermSession } from '../global'
 import {
+  getPrefs,
   getPrompts,
   savePrompts,
   getRecentDirs,
@@ -10,6 +11,7 @@ import {
 } from '../lib/prefs'
 import { toast } from '../lib/toast'
 import { t, ti } from '../lib/i18n'
+
 import Icon from './Icon'
 
 interface Props {
@@ -22,7 +24,7 @@ interface Props {
   onNewTerminal: (opts: { name?: string; command?: string }) => void
 }
 
-type Panel = 'files' | 'prompts' | null
+type Panel = 'prompts' | null
 const PROMPT_VAR_RE = /\{\{\s*([\w.-]+)\s*\}\}/g
 
 function promptVars(text: string): string[] {
@@ -32,14 +34,6 @@ function promptVars(text: string): string[] {
 }
 function fillVars(text: string, values: Record<string, string>): string {
   return text.replace(PROMPT_VAR_RE, (whole, name) => values[name] ?? whole)
-}
-
-interface FileEntry {
-  key: string
-  label: string // shown text (relative path)
-  insert: string // what goes after @ (relative for cwd, absolute for extra dirs)
-  badge: string // extra-dir short name, '' for cwd
-  isDir: boolean
 }
 
 export default function SessionTools({
@@ -52,10 +46,7 @@ export default function SessionTools({
   onNewTerminal
 }: Props): JSX.Element {
   const [panel, setPanel] = useState<Panel>(null)
-  // @file picker entries — cwd files (relative) + extra picked dirs (absolute)
-  const [files, setFiles] = useState<FileEntry[] | null>(null)
-  const [extraRoots, setExtraRoots] = useState<string[]>([])
-  const [fileQuery, setFileQuery] = useState('')
+  const [startRect, setStartRect] = useState<DOMRect | null>(null) // Claude button, for its popup
   const [prompts, setPrompts] = useState<SavedPrompt[]>(getPrompts())
   const [editing, setEditing] = useState<SavedPrompt | null>(null)
   const [filling, setFilling] = useState<{
@@ -90,6 +81,7 @@ export default function SessionTools({
     onLocalPatch(patch)
   }
   function startClaude(): void {
+    setStartRect(null)
     onNewTerminal({ name: 'claude', command: `claude${claudeArgs()}` })
   }
 
@@ -118,38 +110,13 @@ export default function SessionTools({
   const shortCwd = cwd.replace(/^.*\/(?=[^/]+\/[^/]+$)/, '…/')
   const recent = getRecentDirs(assistantId).filter((d) => d !== cwd)
 
-  useEffect(() => {
-    if (panel !== 'files') return
-    let alive = true
-    setFiles(null)
-    // load cwd (relative @paths) + each extra dir (absolute @paths)
-    const roots = [{ dir: cwd, external: false }, ...extraRoots.map((d) => ({ dir: d, external: true }))]
-    Promise.all(
-      roots.map(async ({ dir, external }) => {
-        const list = await window.api.listFiles(dir)
-        const short = dir.replace(/^.*\/(?=[^/]+$)/, '')
-        return list.map(({ path: rel, isDir }) => ({
-          key: `${dir}/${rel}`,
-          label: rel,
-          insert: external ? `${dir.replace(/\/$/, '')}/${rel}` : rel,
-          badge: external ? short : '',
-          isDir
-        }))
-      })
-    ).then((groups) => {
-      if (alive) setFiles(groups.flat())
-    })
-    return () => {
-      alive = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel, cwd, extraRoots])
-
-  async function addRoot(): Promise<void> {
-    const r = await window.api.pickDir(cwd)
-    if (r.ok && r.path && !extraRoots.includes(r.path) && r.path !== cwd) {
-      setExtraRoots((prev) => [...prev, r.path!])
-    }
+  // the terminal takes a path from anywhere on disk, so this is the OS picker
+  // rather than a listing of the working directory
+  async function pickFiles(): Promise<void> {
+    if (!requireTerm()) return
+    const r = await window.api.pickFiles(cwd)
+    if (!r.ok || r.paths.length === 0) return
+    inject(r.paths.map((p) => `@${p}`).join(' ') + ' ')
   }
 
   function requireTerm(): boolean {
@@ -216,6 +183,13 @@ export default function SessionTools({
       setPanel(null)
     }
   }
+  function removePrompt(p: SavedPrompt): void {
+    if (getPrefs().confirmDelete && !confirm(ti('confirmDeletePrompt', { name: p.title }))) return
+    const next = prompts.filter((x) => x.id !== p.id)
+    setPrompts(next)
+    savePrompts(next)
+  }
+
   function sendFilled(): void {
     if (!filling) return
     inject(fillVars(filling.prompt.text, filling.values))
@@ -237,12 +211,6 @@ export default function SessionTools({
     savePrompts(next)
     setEditing(null)
   }
-
-  const filteredFiles = (files || []).filter((f) =>
-    fileQuery
-      ? (f.badge + '/' + f.label).toLowerCase().includes(fileQuery.toLowerCase())
-      : true
-  )
 
   return (
     <div className="st-wrap">
@@ -313,36 +281,67 @@ export default function SessionTools({
         )}
 
         <div className="st-actions">
-          <select
-            className="st-model"
-            value={model}
-            title="Model"
-            onChange={(e) => setModelEffort({ model: e.target.value })}
+          <button
+            className="st-btn primary"
+            onClick={(e: MouseEvent<HTMLButtonElement>) =>
+              setStartRect(startRect ? null : e.currentTarget.getBoundingClientRect())
+            }
+            title={t('startClaudeTitle')}
           >
-            <option value="">{t('modelAuto')}</option>
-            <option value="opus">opus</option>
-            <option value="sonnet">sonnet</option>
-            <option value="haiku">haiku</option>
-          </select>
-          <select
-            className="st-model"
-            value={effort}
-            title={t('reasoningEffort')}
-            onChange={(e) => setModelEffort({ effort: e.target.value })}
-          >
-            <option value="">{t('effortAuto')}</option>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-          </select>
-          <button className="st-btn primary" onClick={startClaude} title={t('startClaudeTitle')}>
             <Icon name="play" size={13} /> Claude
           </button>
+          {startRect && (
+            <div
+              className="tab-pop start-pop"
+              onClick={(e) => e.stopPropagation()}
+              style={{ position: 'fixed', top: startRect.bottom + 4, left: Math.max(8, startRect.right - 210) }}
+            >
+              <div className="muted">Model</div>
+              <div className="start-opts">
+                {[
+                  ['', t('modelAuto')],
+                  ['fable', 'fable'],
+                  ['opus', 'opus'],
+                  ['sonnet', 'sonnet'],
+                  ['haiku', 'haiku']
+                ].map(
+                  ([v, label]) => (
+                    <button
+                      key={v || 'auto'}
+                      className={`st-mini ${model === v ? 'primary' : ''}`}
+                      onClick={() => setModelEffort({ model: v })}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
+              <div className="muted">{t('reasoningEffort')}</div>
+              <div className="start-opts">
+                {[['', t('effortAuto')], ['low', 'low'], ['medium', 'medium'], ['high', 'high']].map(
+                  ([v, label]) => (
+                    <button
+                      key={v || 'auto'}
+                      className={`st-mini ${effort === v ? 'primary' : ''}`}
+                      onClick={() => setModelEffort({ effort: v })}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
+              <div className="start-pop-foot">
+                <button className="btn" onClick={() => setStartRect(null)}>
+                  {t('cancel')}
+                </button>
+                <button className="btn primary" onClick={startClaude}>
+                  {t('startClaude')}
+                </button>
+              </div>
+            </div>
+          )}
           <span className="st-sep" />
-          <button
-            className={`st-btn ${panel === 'files' ? 'active' : ''}`}
-            onClick={() => setPanel(panel === 'files' ? null : 'files')}
-          >
+          <button className="st-btn" onClick={pickFiles} title={t('filesTitle')}>
             <Icon name="file" size={14} /> {t('files')}
           </button>
           <button
@@ -362,60 +361,6 @@ export default function SessionTools({
           )}
         </div>
       </div>
-
-      {panel === 'files' && (
-        <div className="st-panel">
-          <div className="st-file-top">
-            <input
-              className="st-search"
-              autoFocus
-              placeholder={t('fileSearchPh')}
-              value={fileQuery}
-              onChange={(e) => setFileQuery(e.target.value)}
-            />
-            <button className="st-mini" onClick={addRoot} title={t('addDirTitle')}>
-              {t('addDir')}
-            </button>
-          </div>
-          {extraRoots.length > 0 && (
-            <div className="st-roots">
-              <span className="st-root-chip cwd" title={cwd}>📁 {cwd.replace(/^.*\/(?=[^/]+$)/, '')} (cwd)</span>
-              {extraRoots.map((d) => (
-                <span key={d} className="st-root-chip" title={d}>
-                  📁 {d.replace(/^.*\/(?=[^/]+$)/, '')}
-                  <span
-                    className="st-root-x"
-                    onClick={() => setExtraRoots((p) => p.filter((x) => x !== d))}
-                  >
-                    ×
-                  </span>
-                </span>
-              ))}
-            </div>
-          )}
-          {files === null && <div className="st-empty">{t('loading')}</div>}
-          {files !== null && filteredFiles.length === 0 && (
-            <div className="st-empty">{t('noFilesFound')}</div>
-          )}
-          <div className="st-files">
-            {filteredFiles.slice(0, 300).map((f) => (
-              <div
-                key={f.key}
-                className={`st-file-row ${f.isDir ? 'dir' : ''}`}
-                title={f.insert}
-                onClick={() => inject(`@${f.insert}${f.isDir ? '/' : ''} `)}
-              >
-                <span className="st-at">{f.isDir ? '📁' : '@'}</span>
-                {f.badge && <span className="st-file-badge">{f.badge}</span>}
-                <span className="st-file-path">{f.label}</span>
-              </div>
-            ))}
-            {filteredFiles.length > 300 && (
-              <div className="st-empty">{ti('moreFiles', { n: filteredFiles.length - 300 })}</div>
-            )}
-          </div>
-        </div>
-      )}
 
       {panel === 'prompts' && (
         <div className="st-panel">
@@ -498,14 +443,7 @@ export default function SessionTools({
               >
                 ✎
               </button>
-              <button
-                className="st-mini danger"
-                onClick={() => {
-                  const next = prompts.filter((x) => x.id !== p.id)
-                  setPrompts(next)
-                  savePrompts(next)
-                }}
-              >
+              <button className="st-mini danger" onClick={() => removePrompt(p)}>
                 ×
               </button>
             </div>

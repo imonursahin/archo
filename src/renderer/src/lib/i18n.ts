@@ -76,6 +76,9 @@ const DICT: Record<string, { en: string; tr: string }> = {
 
   // integrations settings
   tabIntegrations: { en: 'Integrations', tr: 'Entegrasyonlar' },
+  tabGithub: { en: 'GitHub', tr: 'GitHub' },
+  tabJira: { en: 'Jira', tr: 'Jira' },
+  tabGcal: { en: 'Google Calendar', tr: 'Google Takvim' },
   githubTitle: { en: 'GitHub', tr: 'GitHub' },
   jiraTitle: { en: 'Jira', tr: 'Jira' },
   ghHint: {
@@ -133,7 +136,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   },
   tvJoin: { en: 'Join', tr: 'Katıl' },
   tvOpenSession: { en: 'Open session “{name}”', tr: '“{name}” session’ını aç' },
-  sessTicketPh: { en: '◫ link a ticket (MB-1234)', tr: '◫ ticket bağla (MB-1234)' },
+  sessTicketPh: { en: '◫ Jira Task Id', tr: '◫ Jira Task Id' },
   sessTicketEdit: { en: 'Click to change the linked ticket', tr: 'Bağlı ticket’ı değiştirmek için tıkla' },
   sessBadKey: { en: 'Not a valid issue key (e.g. MB-1234)', tr: 'Geçerli bir issue key değil (ör. MB-1234)' },
   tvInstantMeet: { en: '+ Instant Meet', tr: '+ Anlık Meet' },
@@ -350,6 +353,8 @@ const DICT: Record<string, { en: string; tr: string }> = {
   tagPlaceholder: { en: '+ tag', tr: '+ etiket' },
   closeSplit: { en: 'Close split', tr: 'Bölmeyi kapat' },
   splitSideBySide: { en: 'Split side by side', tr: 'Yan yana böl' },
+  splitPickHint: { en: 'Pick the two terminals to show', tr: 'Yan yana görünecek iki terminali seç' },
+  splitApply: { en: 'Split', tr: 'Böl' },
   emptySession: { en: 'This session is empty', tr: 'Bu session boş' },
   emptySessionSub: { en: 'Open a terminal with "＋" — its output is saved automatically.', tr: '“＋” ile bir terminal aç — çıktısı otomatik kaydedilir.' },
   terminalEnded: { en: '[terminal ended]', tr: '[terminal sonlandı]' },
@@ -371,7 +376,12 @@ const DICT: Record<string, { en: string; tr: string }> = {
   effortAuto: { en: 'effort: auto', tr: 'effort: oto' },
   reasoningEffort: { en: 'Reasoning effort', tr: 'Reasoning effort' },
   startClaudeTitle: { en: 'Start Claude with the selected model/effort', tr: 'Seçili model/effort ile Claude başlat' },
+  startClaude: { en: 'Start', tr: 'Başlat' },
   files: { en: 'Files', tr: 'Dosyalar' },
+  filesTitle: {
+    en: 'Pick files or folders — their full paths go to the terminal',
+    tr: 'Dosya ya da klasör seç — tam yolları terminale gider'
+  },
   prompts: { en: 'Prompts', tr: 'Promptlar' },
   bridgeTitle: {
     en: "Use the assistant's whole config (skill/agent/command/mcp/CLAUDE.md/settings) in this repo",
@@ -379,12 +389,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   },
   bridgeLinked: { en: 'Linked ({count})', tr: 'Bağlı ({count})' },
   bridgeLink: { en: 'Link assistant', tr: 'Asistanı bağla' },
-  fileSearchPh: { en: 'search file… (click → adds @path to terminal)', tr: 'dosya ara… (tıkla → terminale @path ekler)' },
-  addDirTitle: { en: 'Add another directory to the list', tr: 'Listeye başka bir dizin ekle' },
-  addDir: { en: '＋ directory', tr: '＋ dizin' },
   loading: { en: 'loading…', tr: 'yükleniyor…' },
-  noFilesFound: { en: 'no files found', tr: 'dosya bulunamadı' },
-  moreFiles: { en: '+{n} more files — narrow the search', tr: '+{n} dosya daha — aramayı daralt' },
   savedPrompts: { en: 'Saved prompts — send to the active terminal', tr: 'Kaydedilmiş promptlar — aktif terminale gönder' },
   newPlus: { en: '＋ New', tr: '＋ Yeni' },
   titlePlaceholder: { en: 'Title', tr: 'Başlık' },
@@ -611,6 +616,7 @@ const DICT: Record<string, { en: string; tr: string }> = {
   errUnknown: { en: 'unknown error', tr: 'bilinmeyen hata' },
   errInvalidJson: { en: 'invalid JSON: ', tr: 'geçersiz JSON: ' },
   errNotSaved: { en: 'could not save', tr: 'kaydedilemedi' },
+  confirmDeletePrompt: { en: 'Delete the prompt "{name}"?', tr: '"{name}" prompt\'u silinsin mi?' },
   confirmDeleteMcp: { en: 'Delete MCP server "{name}" from .mcp.json?', tr: '"{name}" MCP server\'ı .mcp.json\'dan silinsin mi?' },
   mcpReconnect: { en: 'Reconnect', tr: 'Yeniden bağlan' },
   confirmDeleteMcpGlobal: {

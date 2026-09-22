@@ -24,14 +24,8 @@ export default function CloseTerminalModal({
         <div className="modal-title">{ti('closeTermTitle', { name })}</div>
         <div className="modal-sub">{t('closeTermSub')}</div>
         <div className="modal-foot">
-          <button className="btn" onClick={onClose} disabled={busy}>
-            {t('cancel')}
-          </button>
-          <button className="btn primary" onClick={onCloseTab} disabled={busy}>
-            {t('closeTermKeep')}
-          </button>
           <button
-            className="btn danger"
+            className="btn text danger"
             disabled={busy}
             onClick={async () => {
               setBusy(true)
@@ -40,6 +34,13 @@ export default function CloseTerminalModal({
             }}
           >
             {busy ? '…' : t('closeTermDelete')}
+          </button>
+          <span className="foot-gap" />
+          <button className="btn" onClick={onClose} disabled={busy}>
+            {t('cancel')}
+          </button>
+          <button className="btn primary" onClick={onCloseTab} disabled={busy}>
+            {t('closeTermKeep')}
           </button>
         </div>
       </div>

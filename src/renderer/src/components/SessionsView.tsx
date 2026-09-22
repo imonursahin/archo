@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -560,6 +560,8 @@ export default function SessionsView({
   const [tabRect, setTabRect] = useState<DOMRect | null>(null)
   const [sessQuery, setSessQuery] = useState('')
   const [splitId, setSplitId] = useState<string | null>(null) // second pane for split view
+  const [splitPick, setSplitPick] = useState<string[] | null>(null) // open picker + its choices
+  const [splitRect, setSplitRect] = useState<DOMRect | null>(null) // the ⊞ button, for the popup
   const [tagInput, setTagInput] = useState('')
   const [termTagInput, setTermTagInput] = useState('')
   const [dragTab, setDragTab] = useState<string | null>(null) // tab being dragged
@@ -646,13 +648,32 @@ export default function SessionsView({
     setTagInput('')
   }
 
-  function toggleSplit(): void {
+  // which two terminals sit side by side is a choice once a session has more
+  // than two, so the button opens a picker instead of guessing
+  function toggleSplit(e: MouseEvent<HTMLButtonElement>): void {
+    setSplitRect(e.currentTarget.getBoundingClientRect())
     if (splitId) {
       setSplitId(null)
+      setSplitPick(null)
       return
     }
-    const other = open?.terminals.find((t) => t.id !== active)
-    if (other) setSplitId(other.id)
+    const other = open?.terminals.find((x) => x.id !== active)
+    setSplitPick([active, other?.id].filter((x): x is string => !!x))
+  }
+
+  function pickSplit(id: string): void {
+    setSplitPick((prev) => {
+      const cur = prev || []
+      if (cur.includes(id)) return cur.filter((x) => x !== id)
+      return cur.length >= 2 ? [cur[1], id] : [...cur, id]
+    })
+  }
+
+  function applySplit(): void {
+    if (splitPick?.length !== 2) return
+    setActive(splitPick[0])
+    setSplitId(splitPick[1])
+    setSplitPick(null)
   }
 
   const shownSessions = sessQuery.trim()
@@ -1223,13 +1244,50 @@ export default function SessionsView({
                 ＋
               </button>
               {open.terminals.length >= 2 && (
-                <button
-                  className={`term-split ${splitId ? 'on' : ''}`}
-                  onClick={toggleSplit}
-                  title={splitId ? t('closeSplit') : t('splitSideBySide')}
-                >
-                  ⊞
-                </button>
+                <>
+                  <button
+                    className={`term-split ${splitId ? 'on' : ''}`}
+                    onClick={toggleSplit}
+                    title={splitId ? t('closeSplit') : t('splitSideBySide')}
+                  >
+                    ⊞
+                  </button>
+                  {splitPick && splitRect && (
+                    <div
+                      className="tab-pop split-pop"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        position: 'fixed',
+                        top: splitRect.bottom + 3,
+                        left: Math.max(8, splitRect.right - 220)
+                      }}
+                    >
+                      <div className="muted">{t('splitPickHint')}</div>
+                      {open.terminals.map((term) => (
+                        <label key={term.id} className="split-pick-row">
+                          <input
+                            type="checkbox"
+                            checked={splitPick.includes(term.id)}
+                            onChange={() => pickSplit(term.id)}
+                          />
+                          <span>{term.name}</span>
+                        </label>
+                      ))}
+                      <div className="split-pop-foot">
+                        <button className="btn" onClick={() => setSplitPick(null)}>
+                          {t('cancel')}
+                        </button>
+                        <button
+                          className="btn primary"
+                          onClick={applySplit}
+                          disabled={splitPick.length !== 2}
+                        >
+                          {t('splitApply')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

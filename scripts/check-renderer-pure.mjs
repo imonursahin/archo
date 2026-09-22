@@ -842,4 +842,64 @@ const child = (name, parent) => ({
   assert.strictEqual(nested({ kind: 'skill' }, false), '', 'a top-level item is not nested')
 }
 
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode')
+// ------------------------------------------------- file picker injection
+// the OS picker hands back absolute paths; each one goes to the terminal as an
+// @reference, space separated, with a trailing space so the next word is free
+{
+  const body = grabIndented(toolsSrc, 'pickFiles')
+  const line = body.match(/inject\(([^\n]+)\)/)
+  assert.ok(line, 'the pickFiles injection was not found — re-point this check')
+  const injected = new Function('r', `return ${line[1]}`)
+  assert.strictEqual(injected({ paths: ['/a/b.md'] }), '@/a/b.md ')
+  assert.strictEqual(injected({ paths: ['/a/b.md', '/c/d e.txt'] }), '@/a/b.md @/c/d e.txt ')
+}
+
+// ----------------------------------------------------- prompt delete confirm
+// a saved prompt is only in localStorage — one stray click and it is gone, so
+// the delete asks first, and respects the "confirm before delete" preference
+{
+  const mk = new Function(
+    'getPrefs', 'confirm', 'ti', 'prompts', 'setPrompts', 'savePrompts',
+    `${transformSync(grabIndented(toolsSrc, 'removePrompt'), { loader: 'ts' }).code}\nreturn removePrompt`
+  )
+  const run = (confirmDelete, answer) => {
+    const log = { saved: null, asked: [] }
+    mk(
+      () => ({ confirmDelete }),
+      (m) => (log.asked.push(m), answer),
+      (k, v) => `${k}:${v.name}`,
+      [{ id: '1', title: 'a' }, { id: '2', title: 'b' }],
+      () => {},
+      (next) => (log.saved = next.map((x) => x.id)),
+      (k) => k
+    )({ id: '1', title: 'a' })
+    return log
+  }
+  const cancelled = run(true, false)
+  assert.strictEqual(cancelled.saved, null, 'a cancelled confirm must keep the prompt')
+  assert.deepStrictEqual(cancelled.asked, ['confirmDeletePrompt:a'], 'the confirm names the prompt')
+  assert.deepStrictEqual(run(true, true).saved, ['2'])
+  const off = run(false, false)
+  assert.deepStrictEqual(off.saved, ['2'], 'with the preference off it deletes without asking')
+  assert.deepStrictEqual(off.asked, [])
+}
+// ------------------------------------------------------ split terminal pick
+// the split picker holds exactly two terminals: a third choice pushes the
+// oldest one out instead of silently doing nothing
+{
+  const sessionsSrc = await read('src/renderer/src/components/SessionsView.tsx')
+  const mk = new Function(
+    'setSplitPick',
+    `${transformSync(grabIndented(sessionsSrc, 'pickSplit'), { loader: 'ts' }).code}\nreturn pickSplit`
+  )
+  const pick = (prev, id) => {
+    let out
+    mk((upd) => (out = upd(prev)))(id)
+    return out
+  }
+  assert.deepStrictEqual(pick(null, 'a'), ['a'], 'the first pick starts the list')
+  assert.deepStrictEqual(pick(['a'], 'b'), ['a', 'b'])
+  assert.deepStrictEqual(pick(['a', 'b'], 'b'), ['a'], 'picking a chosen one unpicks it')
+  assert.deepStrictEqual(pick(['a', 'b'], 'c'), ['b', 'c'], 'a third pick drops the oldest')
+}
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode, file picker injection, prompt delete confirm, split pick')

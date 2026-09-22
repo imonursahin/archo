@@ -315,6 +315,7 @@ export interface StudioApi {
     }
   ): Promise<void>
   pickDir(defaultPath?: string): Promise<{ ok: boolean; path?: string }>
+  pickFiles(defaultPath?: string): Promise<{ ok: boolean; paths: string[] }>
   setSessionCwd(id: string, cwd: string): Promise<void>
   gitStatus(dir: string): Promise<GitStatus>
   gitRevertFile(dir: string, file: string, untracked: boolean): Promise<void>

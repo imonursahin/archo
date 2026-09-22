@@ -11,9 +11,11 @@ interface Props {
 }
 
 type Tab = 'general' | 'prefs' | 'integrations' | 'doctor'
+type Integration = 'github' | 'jira' | 'gcal'
 
 export default function SettingsModal({ onClose, onChange }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>('general')
+  const [integration, setIntegration] = useState<Integration>('github')
   const [lang, setLangState] = useState<Lang>(getLang())
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [prefs, setPrefsState] = useState<Prefs>(getPrefs())
@@ -65,9 +67,29 @@ export default function SettingsModal({ onClose, onChange }: Props): JSX.Element
 
         {tab === 'integrations' && (
           <div className="integrations">
-            <GithubSettings />
-            <JiraSettings />
-            <GoogleSettings />
+            <div className="settings-tabs sub">
+              <button
+                className={integration === 'github' ? 'active' : ''}
+                onClick={() => setIntegration('github')}
+              >
+                {t('tabGithub')}
+              </button>
+              <button
+                className={integration === 'jira' ? 'active' : ''}
+                onClick={() => setIntegration('jira')}
+              >
+                {t('tabJira')}
+              </button>
+              <button
+                className={integration === 'gcal' ? 'active' : ''}
+                onClick={() => setIntegration('gcal')}
+              >
+                {t('tabGcal')}
+              </button>
+            </div>
+            {integration === 'github' && <GithubSettings />}
+            {integration === 'jira' && <JiraSettings />}
+            {integration === 'gcal' && <GoogleSettings />}
           </div>
         )}
 
@@ -499,19 +521,29 @@ function DoctorPanel(): JSX.Element {
     <div className="doctor">
       <div className="doctor-head">
         <span className="muted">{t('doctorHint')}</span>
-        <button className="btn" onClick={run} disabled={busy}>
-          {busy ? t('doctorRunning') : `↻ ${t('doctorRun')}`}
+        <button
+          className="btn doctor-recheck"
+          onClick={run}
+          disabled={busy}
+          title={busy ? t('doctorRunning') : t('doctorRun')}
+          aria-label={busy ? t('doctorRunning') : t('doctorRun')}
+        >
+          ↻
         </button>
       </div>
-      {(checks || []).map((c) => (
+      {busy &&
+        Array.from({ length: checks?.length || 6 }, (_, i) => (
+          <div key={`sk-${i}`} className="doctor-row skeleton" />
+        ))}
+      {!busy &&
+        (checks || []).map((c) => (
         <div key={c.id} className={`doctor-row ${c.status}`}>
           <span className="doctor-dot">{c.status === 'ok' ? '✓' : c.status === 'warn' ? '!' : '✕'}</span>
           <span className="doctor-label">{c.label}</span>
           <span className="doctor-detail">{c.detail}</span>
           {c.hint && <code className="doctor-hint">{c.hint}</code>}
-        </div>
-      ))}
-      {!checks && <div className="muted">{t('doctorRunning')}</div>}
+          </div>
+        ))}
     </div>
   )
 }

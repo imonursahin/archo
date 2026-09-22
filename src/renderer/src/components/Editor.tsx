@@ -56,7 +56,7 @@ const FIELD_SUGGEST: Record<string, string[]> = {
   agent: ['model', 'tools', 'color'],
   command: ['argument-hint', 'allowed-tools', 'model']
 }
-const MODEL_OPTS = ['inherit', 'opus', 'sonnet', 'haiku']
+const MODEL_OPTS = ['inherit', 'fable', 'opus', 'sonnet', 'haiku']
 const COLOR_OPTS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'cyan']
 
 // Claude Code only discovers a skill/agent by its frontmatter: a missing name or

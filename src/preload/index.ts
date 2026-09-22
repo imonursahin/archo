@@ -69,6 +69,7 @@ const api = {
     }
   ) => ipcRenderer.invoke('termsession:meta', id, patch),
   pickDir: (defaultPath?: string) => ipcRenderer.invoke('dir:pick', defaultPath),
+  pickFiles: (defaultPath?: string) => ipcRenderer.invoke('file:pick', defaultPath),
   setSessionCwd: (id: string, cwd: string) => ipcRenderer.invoke('session:setCwd', id, cwd),
   gitStatus: (dir: string) => ipcRenderer.invoke('git:status', dir),
   gitRevertFile: (dir: string, file: string, untracked: boolean) =>
