@@ -7,6 +7,7 @@
 // of the surrounding handler shows up here as a failure to locate the block,
 // which is the intended alarm: this file must be re-pointed, not deleted.
 // Run: node scripts/check-main-handlers.mjs
+import { transformSync } from 'esbuild'
 import { promises as fs } from 'fs'
 import path from 'path'
 import assert from 'assert'
@@ -400,6 +401,49 @@ res = await deleteHandler('s', 't', sessionOf([{ id: 't', claudeSessionId: 'abc'
 })
 assert.strictEqual(res.failed, 2, 'a transcript still on disk after both passes must be reported')
 
+// ----------------------------------------------------- file:pick result shape
+// The renderer reads `r.paths.length` unconditionally, so every exit from this
+// handler has to carry an array. A cancel that answered `undefined` or a bare
+// `{ ok: false }` would throw inside the Files click handler rather than quietly
+// doing nothing — and a cancel is the common case, not the edge one.
+{
+  const pickBlock = slice("  handle('file:pick'", "  handle('session:setCwd'", 'the file:pick handler')
+  const js = transformSync(pickBlock, { loader: 'ts' }).code
+  const answer = async (dialogResult) => {
+    let handler
+    new Function(
+      'handle',
+      'dialog',
+      'process',
+      js
+    )(
+      (_channel, fn) => (handler = fn),
+      { showOpenDialog: async () => dialogResult },
+      { platform: 'darwin' }
+    )
+    assert.strictEqual(typeof handler, 'function', 'file:pick no longer registers a handler')
+    return handler('/tmp')
+  }
+
+  assert.deepStrictEqual(
+    await answer({ canceled: true, filePaths: [] }),
+    { ok: false, paths: [] },
+    'a cancelled dialog answers with an empty array, not undefined'
+  )
+  assert.deepStrictEqual(
+    await answer({ canceled: false, filePaths: ['/a/b.md', '/c/d e.txt'] }),
+    { ok: true, paths: ['/a/b.md', '/c/d e.txt'] },
+    'a completed dialog passes the picked paths through untouched'
+  )
+  // macOS can hand back a stale filePaths alongside canceled:true — ok:false is
+  // the only thing standing between that and an injection the user never asked for
+  assert.deepStrictEqual(
+    await answer({ canceled: true, filePaths: ['/a/b.md'] }),
+    { ok: false, paths: [] },
+    'a cancel wins over whatever filePaths the dialog left behind'
+  )
+}
+
 console.log(
-  'ok — main handler logic: clone target, plugins dispatch, prune join, export count, title sync'
+  'ok — main handler logic: clone target, plugins dispatch, prune join, export count, title sync, file:pick result'
 )

@@ -921,4 +921,183 @@ const child = (name, parent) => ({
     assert.ok(propsFor(os).includes('openFile'))
   }
 }
-console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode, file picker injection, dialog properties, prompt delete confirm, split pick')
+// ------------------------------------------------ file picker: the two no-ops
+// Both early returns are silent and both have to stay that way. With no
+// terminal there is nothing to write to — and the dialog must not even open, or
+// the user picks files that go nowhere. With an empty answer the map/join would
+// still produce a lone space and push it into the shell.
+{
+  const mk = new Function(
+    'requireTerm',
+    'window',
+    'cwd',
+    'inject',
+    `${transformSync(grabIndented(toolsSrc, 'pickFiles'), { loader: 'ts' }).code}\nreturn pickFiles`
+  )
+  const run = async (hasTerm, dialogAnswer) => {
+    const log = { opened: 0, injected: [] }
+    await mk(
+      () => hasTerm,
+      { api: { pickFiles: async () => (log.opened++, dialogAnswer) } },
+      '/tmp',
+      (text) => log.injected.push(text)
+    )()
+    return log
+  }
+
+  const noTerm = await run(false, { ok: true, paths: ['/a/b.md'] })
+  assert.deepStrictEqual(noTerm.injected, [], 'with no terminal nothing is injected')
+  assert.strictEqual(noTerm.opened, 0, 'with no terminal the dialog must not even open')
+
+  assert.deepStrictEqual(
+    (await run(true, { ok: false, paths: [] })).injected,
+    [],
+    'a cancelled dialog injects nothing'
+  )
+  assert.deepStrictEqual(
+    (await run(true, { ok: true, paths: [] })).injected,
+    [],
+    'an empty selection injects nothing — the join would send a bare space to the shell'
+  )
+  assert.deepStrictEqual(
+    (await run(true, { ok: true, paths: ['/a/b.md'] })).injected,
+    ['@/a/b.md '],
+    'a real pick still reaches the terminal'
+  )
+}
+
+// ------------------------------------------------------ split button branches
+// One button with three jobs: it closes an open picker, it tears down an active
+// split, and otherwise it opens the picker already holding the current terminal
+// so a single further click is enough to split.
+{
+  const sessionsSrc = await read('src/renderer/src/components/SessionsView.tsx')
+  const toggleSrc = transformSync(grabIndented(sessionsSrc, 'toggleSplit'), { loader: 'ts' }).code
+  const click = ({ splitPick = null, splitId = null, terminals = [], active = 'a' }) => {
+    const log = { pick: 'untouched', splitId: 'untouched', rects: 0 }
+    new Function(
+      'splitPick',
+      'setSplitPick',
+      'setSplitRect',
+      'splitId',
+      'setSplitId',
+      'open',
+      'active',
+      `${toggleSrc}\nreturn toggleSplit`
+    )(
+      splitPick,
+      (v) => (log.pick = v),
+      () => log.rects++,
+      splitId,
+      (v) => (log.splitId = v),
+      { terminals },
+      active
+    )({ currentTarget: { getBoundingClientRect: () => ({ bottom: 0, right: 0 }) } })
+    return log
+  }
+
+  const closing = click({ splitPick: ['a', 'b'], terminals: [{ id: 'a' }, { id: 'b' }] })
+  assert.strictEqual(closing.pick, null, 'clicking with the picker open closes it')
+  assert.strictEqual(closing.splitId, 'untouched', 'closing the picker must not tear down the split')
+  assert.strictEqual(closing.rects, 0, 'closing the picker does not re-anchor the popup')
+
+  const unsplit = click({ splitId: 'b', terminals: [{ id: 'a' }, { id: 'b' }] })
+  assert.strictEqual(unsplit.splitId, null, 'an active split is cleared')
+  assert.strictEqual(unsplit.pick, null, 'tearing down a split leaves no picker behind')
+
+  assert.deepStrictEqual(
+    click({ terminals: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }).pick,
+    ['a', 'b'],
+    'the picker opens seeded with the active terminal and the first other one'
+  )
+  assert.deepStrictEqual(
+    click({ terminals: [{ id: 'a' }] }).pick,
+    ['a'],
+    'with no other terminal the seed is the active one alone — never a list holding undefined'
+  )
+}
+
+// ------------------------------------------------------------- split apply
+// The apply button is `disabled` below two picks, but the guard is the real
+// one: a keyboard submit or a stale click still reaches this function, and a
+// one-element list would set splitId to undefined and blank the right pane.
+{
+  const sessionsSrc = await read('src/renderer/src/components/SessionsView.tsx')
+  const applySrc = transformSync(grabIndented(sessionsSrc, 'applySplit'), { loader: 'ts' }).code
+  const apply = (splitPick) => {
+    const log = { active: 'untouched', splitId: 'untouched', pick: 'untouched' }
+    new Function(
+      'splitPick',
+      'setActive',
+      'setSplitId',
+      'setSplitPick',
+      `${applySrc}\nreturn applySplit`
+    )(
+      splitPick,
+      (v) => (log.active = v),
+      (v) => (log.splitId = v),
+      (v) => (log.pick = v)
+    )()
+    return log
+  }
+
+  for (const [label, pick] of [
+    ['no picker', null],
+    ['an empty list', []],
+    ['a single pick', ['a']],
+    ['three picks', ['a', 'b', 'c']]
+  ]) {
+    assert.deepStrictEqual(
+      apply(pick),
+      { active: 'untouched', splitId: 'untouched', pick: 'untouched' },
+      `${label} must be a no-op`
+    )
+  }
+
+  const applied = apply(['a', 'b'])
+  assert.strictEqual(applied.active, 'a', 'the first pick becomes the focused terminal')
+  assert.strictEqual(applied.splitId, 'b', 'the second pick becomes the split pane')
+  assert.strictEqual(applied.pick, null, 'applying closes the picker')
+}
+
+// --------------------------------------------------------- model list parity
+// The model names exist twice by hand: MODEL_OPTS drives the editor's frontmatter
+// `model:` field, the start popup drives the `--model` flag. Adding a model to one
+// and not the other is invisible until someone looks for it in the wrong menu.
+// Only the leading sentinel is allowed to differ — 'inherit' means "whatever the
+// parent uses" in frontmatter, '' means "let the CLI choose" on the command line.
+{
+  const editorLit = editorSrc.match(/const MODEL_OPTS = (\[[^\]]*\])/)
+  assert.ok(editorLit, 'MODEL_OPTS is no longer a plain array literal — re-point this check')
+  const editorModels = new Function(`return ${editorLit[1]}`)()
+
+  const popupLit = toolsSrc.match(/start-opts">\s*\{(\[[\s\S]*?\])\.map\(/)
+  assert.ok(popupLit, 'the start popup model list was not found — re-point this check')
+  const popupModels = new Function('t', `return ${popupLit[1]}`)(() => 'auto').map(([v]) => v)
+
+  assert.strictEqual(editorModels[0], 'inherit', 'the editor list leads with the inherit sentinel')
+  assert.strictEqual(popupModels[0], '', 'the popup list leads with the auto sentinel')
+  assert.deepStrictEqual(
+    popupModels.slice(1),
+    editorModels.slice(1),
+    'the two model lists drifted — a model added to one menu is missing from the other'
+  )
+  assert.ok(editorModels.length > 2, `only ${editorModels.length} models parsed — regex is stale`)
+}
+
+// ------------------------------------------------------- doctor skeleton rows
+// The skeleton stands in for the "running" line that used to be here, so its row
+// count is the only hint of how long the wait is. First run has no previous
+// result to measure, and a zero-length one must not collapse the panel to
+// nothing — both fall back to six rows.
+{
+  const settingsSrc = await read('src/renderer/src/components/SettingsModal.tsx')
+  const expr = settingsSrc.match(/Array\.from\(\{ length: ([^}]+) \}/)
+  assert.ok(expr, 'the doctor skeleton row count was not found — re-point this check')
+  const rows = new Function('checks', `return ${expr[1]}`)
+  assert.strictEqual(rows(undefined), 6, 'the first run has no previous result to size against')
+  assert.strictEqual(rows([]), 6, 'an empty result must not collapse the panel to no rows at all')
+  assert.strictEqual(rows([1, 2, 3]), 3, 'a re-run shows as many rows as the last result had')
+}
+
+console.log('ok — renderer helpers: lint, promptVars, fillVars, fmtSize, hook raw-mode guards, fileTag, dropInFolder, renderGrouped, canDrag, group count, group dragCtx, hook raw tab/discard, new-folder button, item tag, collapsed folder, folder input keys, isJson, editor mode, file picker injection, file picker guards, dialog properties, prompt delete confirm, split pick, split toggle, split apply, model list parity, doctor skeleton')
